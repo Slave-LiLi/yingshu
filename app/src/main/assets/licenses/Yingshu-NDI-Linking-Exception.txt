@@ -1,0 +1,25 @@
+Yingshu NDI linking permission
+
+This is an additional permission under section 7 of the GNU Affero General
+Public License, version 3 (AGPL-3.0).
+
+For the independently authored Yingshu application and NDI integration portions
+that the Yingshu licensors have the right to license, those licensors permit
+linking or combining those portions with the unmodified NDI Android SDK 6.3.2
+runtime supplied by its vendor, and conveying the resulting application.
+The AGPL-3.0 requirements continue to apply to the covered Yingshu portions,
+including their Corresponding Source. The NDI SDK and runtime remain subject
+to their vendor's separate license and distribution conditions; this permission
+does not grant access to the vendor's source or waive those conditions.
+
+This permission applies only to the Yingshu portions identified above. It does
+not apply to the Ultralytics model, Ultralytics training software, ONNX Runtime,
+other third-party code or materials, or any portion for which the Yingshu
+licensors cannot grant this permission. It does not grant an exception on
+behalf of any third-party copyright holder or assert that arbitrary additional
+combinations are permitted.
+
+You may remove this additional permission from a copy, as allowed by section 7.
+If you modify the covered Yingshu portions, you may extend this permission to
+your own modifications but are not required to do so. This additional permission
+does not add a restriction on charging for permitted distribution.

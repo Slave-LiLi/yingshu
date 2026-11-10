@@ -1,0 +1,19 @@
+{
+  "checkpoint_sha256": "f0fecfc75104ee62f55421d22c31f6000a6209afe9baf875aedd44407bd9090d",
+  "runtime_onnx_sha256": "850d46265ff4f2cdeb0e27c545752571423292ee1522798c4f282b1af75f5af5",
+  "runtime_mask_sha256": "0f035302b617d2cb0c62b728a4158d2eae9f1df6f5215dd51f7447238e9cfaac",
+  "reexport_onnx_graph_bytes_identical": true,
+  "synthetic_comparison_cases": 3,
+  "synthetic_max_abs_difference": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "onnx_conv_nodes": 102,
+  "python_scripts_parse": true,
+  "cli_help_checks": 4,
+  "retraining_performed": false,
+  "new_accuracy_measurement": false,
+  "synthetic_mask_padding_exact": true,
+  "existing_output_refused": true
+}

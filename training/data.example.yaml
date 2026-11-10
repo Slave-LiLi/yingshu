@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Replace with your own labeled 320x320 masked and padded images.
+path: ./your-dataset
+train: images/train
+val: images/val
+names:
+  0: VK47
+  1: R301
+  2: R99
+  3: NEMESIS
+  4: ALTERNATOR
+  5: LSTAR
+  6: PROWLER
+  7: CAR
+  8: none
+  9: one_x
+  10: two_x
+  11: three_x
+  12: four_x

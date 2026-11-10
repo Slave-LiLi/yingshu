@@ -1,0 +1,122 @@
+{
+  "schema_version": 6,
+  "frame_size": [
+    1920,
+    1080
+  ],
+  "roi_xywh": [
+    1472,
+    936,
+    320,
+    128
+  ],
+  "input_color": "RGB",
+  "input_dtype": "float32",
+  "input_layout": "NCHW",
+  "normalization": "pixel/255.0",
+  "opset": 17,
+  "mask": {
+    "file": "panel-mask.bin",
+    "width": 320,
+    "height": 128,
+    "encoding": "u8_keep_0_or_1",
+    "sha256": "0f035302b617d2cb0c62b728a4158d2eae9f1df6f5215dd51f7447238e9cfaac",
+    "source_sha256": "c87fe4c98d198340bbd26fd5cd6a267a175e251043a7fa28e0e67509edf0dd38",
+    "source_name": "图层 1.png",
+    "source_snapshot": "mask/versions/c87fe4c98d198340bbd26fd5cd6a267a175e251043a7fa28e0e67509edf0dd38/source.png",
+    "source_size": [
+      1920,
+      1080
+    ],
+    "target_frame_size": [
+      1920,
+      1080
+    ],
+    "roi_xywh": [
+      1472,
+      936,
+      320,
+      128
+    ],
+    "conversion": "keep = source_alpha < 128; nearest resize to target; crop panel; drop RGB is black",
+    "source_rgb_ignored": true,
+    "source_file_unchanged": true,
+    "kept_pixels": 21024,
+    "total_panel_pixels": 40960,
+    "binary_application_idempotent": true
+  },
+  "output_semantics": "One shared-backbone inference. NMS-free xyxy/score/class; gun classes0..7 and optic classes8..12. Input padded y96.",
+  "limitations": [
+    "New v5 recording is1024x576, resized using cv2.INTER_LINEAR to1920x1080 before the unchanged ROI and mask; upsampling adds no source detail.",
+    "New v5 holdout uses separated temporal episodes from the same recording/gameplay, not an independent recording or new match.",
+    "Only ALTERNATOR none, LSTAR none/three_x, PROWLER two_x and CAR two_x were user-confirmed; unseen optic states remain unverified.",
+    "Nemesis retains five training frames from one short four_x scene; other optics and independent generalization remain unverified.",
+    "Old R99 none and user-confirmed one_x samples remain unchanged.",
+    "Old Kraber exclusion is retained: no Kraber training or negative samples. Threshold rejection cannot guarantee rejection of every unseen gun.",
+    "Old234 transformed samples and old v4 holdout19 are development regression, not independent accuracy.",
+    "New v5 offline correctness requires correct gun/optic plus accepted optic center errors strictly below14px in both axes; this is an evaluation rule, not a new runtime threshold."
+  ],
+  "joint_detector": {
+    "file": "joint.onnx",
+    "classes": [
+      "VK47",
+      "R301",
+      "R99",
+      "NEMESIS",
+      "ALTERNATOR",
+      "LSTAR",
+      "PROWLER",
+      "CAR",
+      "none",
+      "one_x",
+      "two_x",
+      "three_x",
+      "four_x"
+    ],
+    "class_order": [
+      "VK47",
+      "R301",
+      "R99",
+      "NEMESIS",
+      "ALTERNATOR",
+      "LSTAR",
+      "PROWLER",
+      "CAR",
+      "none",
+      "one_x",
+      "two_x",
+      "three_x",
+      "four_x"
+    ],
+    "input_size": 320,
+    "resize": "letterbox_114",
+    "padding_ltrb": [
+      0,
+      96,
+      0,
+      96
+    ],
+    "scale": 1.0,
+    "gun_score_threshold": 0.25,
+    "optic_score_threshold": 0.8,
+    "optic_conflict_threshold": 0.8,
+    "optic_conflict_margin": 0.1,
+    "sha256": "850d46265ff4f2cdeb0e27c545752571423292ee1522798c4f282b1af75f5af5",
+    "bytes": 9701857,
+    "input_shape": [
+      1,
+      3,
+      320,
+      320
+    ],
+    "output_shape": [
+      1,
+      300,
+      6
+    ],
+    "four_x_policy": "Includes 2-4x adjustable optic regardless of current zoom",
+    "r99_policy": "Only none and one_x; reject unsupported winning class, no fallback"
+  },
+  "training_source_video_sha256": "a3a32b8f91639aae3e914d3a6c46324e8d53b24fa9bb3743775e329d5de8e336",
+  "previous_v4_training_source_video_sha256": "39bd993e60d6b014a23431c1cd82bce8ec272bfdeb451ded9b4c53811c2c2a3d"
+}

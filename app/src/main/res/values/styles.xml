@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:colorBackground">#FFFFFF</item>
+        <item name="android:colorBackgroundFloating">#FFFFFF</item>
+        <item name="android:textColorPrimary">#202123</item>
+        <item name="android:textColorSecondary">#6B6B6B</item>
+        <item name="android:colorAccent">#202123</item>
+        <item name="android:colorControlNormal">#6B6B6B</item>
+        <item name="android:colorControlActivated">#202123</item>
+        <item name="android:colorButtonNormal">#F7F7F8</item>
+        <item name="android:alertDialogTheme">@style/AppDialogTheme</item>
+    </style>
+    <style name="AppDialogTheme" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#202123</item>
+        <item name="android:colorControlActivated">#202123</item>
+        <item name="android:colorControlNormal">#6B6B6B</item>
+        <item name="android:colorBackground">#FFFFFF</item>
+        <item name="android:colorBackgroundFloating">#FFFFFF</item>
+        <item name="android:textColorPrimary">#202123</item>
+        <item name="android:textColorSecondary">#6B6B6B</item>
+    </style>
+</resources>

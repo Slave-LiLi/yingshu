@@ -1,0 +1,14 @@
+{
+  "python": "3.13.14",
+  "packages": {
+    "ultralytics": "8.4.203",
+    "torch": "2.9.1+cu128",
+    "torchvision": "0.24.1+cu128",
+    "onnx": "1.19.1",
+    "onnxruntime": "1.23.2",
+    "numpy": "2.5.4",
+    "opencv-python": "5.0.0.93",
+    "Pillow": "13.0.0"
+  },
+  "capture_note": "Observed in the historical local training environment on 2026-11-10; not a complete transitive dependency lock."
+}

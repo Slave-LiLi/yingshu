@@ -1,0 +1,27 @@
+Yingshu includes the official NDI SDK for Android 6.3.2 in its compiled APK.
+NDI is an external third-party runtime; the application's UI, JNI integration,
+hardware connection code and other application code were written independently.
+
+NDI(R) is a registered trademark of Vizrt NDI AB.
+Product and SDK information: https://ndi.video/
+SDK documentation: https://docs.ndi.video/all/developing-with-ndi/sdk
+
+Official Android SDK archive used:
+https://downloads.ndi.tv/SDK/NDI_SDK_Android/Install_NDI_SDK_v6_Android.tar.gz
+Downloaded archive SHA-256:
+895fe323f7329af86df5e0a8ad01f708d30362ff2771ae1179794dc1b4ed8668
+SDK Version.txt: NDI 2026-04-13 git-5396c5f15 v6.3.2.0
+
+The bundled arm64-v8a/libndi.so is the unchanged runtime from that official SDK.
+The applicable SDK agreement and third-party notices are packaged in the APK:
+assets/licenses/NDI-SDK-License.txt
+assets/licenses/NDI-third-party.txt
+
+The NDI SDK is proprietary and its runtime is distributed only as part of this
+application under the SDK's terms. Do not distribute the complete SDK or NDI
+Tools as part of this project. Consult the included agreement before any later
+commercial or fixed-purpose hardware distribution.
+
+The interface includes the NDI website link and trademark attribution near NDI
+selection. Reception has no artificial test images; RUNNING means a real video
+frame was captured. Codec/source compatibility is subject to actual testing.

@@ -1,0 +1,58 @@
+{
+  "checkpoint_file": "weights/joint-v5.pt",
+  "checkpoint_sha256": "f0fecfc75104ee62f55421d22c31f6000a6209afe9baf875aedd44407bd9090d",
+  "checkpoint_bytes": 5456239,
+  "model_sha256": "850d46265ff4f2cdeb0e27c545752571423292ee1522798c4f282b1af75f5af5",
+  "selection_basis": "Selected and frozen using development/validation/training-fit and old v4 regression only; no new v5 final holdout used. Never tune on the following52frame results.",
+  "class_order": [
+    "VK47",
+    "R301",
+    "R99",
+    "NEMESIS",
+    "ALTERNATOR",
+    "LSTAR",
+    "PROWLER",
+    "CAR",
+    "none",
+    "one_x",
+    "two_x",
+    "three_x",
+    "four_x"
+  ],
+  "old_class_mapping": {
+    "0": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 8,
+    "5": 9,
+    "6": 10,
+    "7": 11,
+    "8": 12
+  },
+  "historical_dataset_counts": {
+    "new_unique": {
+      "train": 54,
+      "holdout": 52,
+      "val": 16
+    },
+    "total_unique": {
+      "val": 36,
+      "train": 209,
+      "gap": 8,
+      "old_holdout": 19,
+      "holdout": 52
+    },
+    "weighted_train": 861,
+    "old_weighted_train": 541,
+    "new_weight_per_combination": 64,
+    "validation": 36,
+    "active_split_pixel_hash_overlap": 0
+  },
+  "original_script_sha256": {
+    "training/train_v5.py": "d7ac34bf2ad12f5b7a67ec9c21c0411abf725fbef0d5901eee09fc3e0a9ea1b7",
+    "training/evaluate_v5.py": "2445c757772465e6e2cb25feb65189c40fd4de5e438839ee891d46d4d462ef53",
+    "prepare_v5.py": "d39799630821f131f677ce72849b9fd2cbbc2d59ed890c7e8b3cc26b735aed7f"
+  },
+  "scope": "Scripts in this directory are portable adaptations of the original training and export procedure. Source recordings, private annotation images, earlier checkpoint, and original dataset are not included. This is an editable selected checkpoint and further-training/export entry point, not exact from-scratch reproduction."
+}

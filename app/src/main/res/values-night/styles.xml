@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:statusBarColor">#212121</item>
+        <item name="android:navigationBarColor">#212121</item>
+        <item name="android:windowBackground">#212121</item>
+        <item name="android:colorBackground">#212121</item>
+        <item name="android:colorBackgroundFloating">#212121</item>
+        <item name="android:textColorPrimary">#ECECEC</item>
+        <item name="android:textColorSecondary">#AAAAAA</item>
+        <item name="android:colorAccent">#ECECEC</item>
+        <item name="android:colorControlNormal">#AAAAAA</item>
+        <item name="android:colorControlActivated">#ECECEC</item>
+        <item name="android:colorButtonNormal">#2B2B2B</item>
+        <item name="android:alertDialogTheme">@style/AppDialogTheme</item>
+    </style>
+    <style name="AppDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#ECECEC</item>
+        <item name="android:colorControlActivated">#ECECEC</item>
+        <item name="android:colorControlNormal">#AAAAAA</item>
+        <item name="android:colorBackground">#212121</item>
+        <item name="android:colorBackgroundFloating">#212121</item>
+        <item name="android:textColorPrimary">#ECECEC</item>
+        <item name="android:textColorSecondary">#AAAAAA</item>
+    </style>
+</resources>

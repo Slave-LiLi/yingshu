@@ -1,0 +1,225 @@
+Yingshu 0.3.12-trial build notes
+
+Public checkout quick start and signing instructions: docs/BUILD.md.
+The public build uses JAVA_HOME (or -JdkRoot), project-local ignored keys/,
+configurable key alias and password environment variables. No signing key or
+signing password is included. The model and inference/hardware logic are unchanged from 0.3.11;
+license text, acknowledgment labels and visible version are updated.
+
+Standalone Java Android project; build.ps1 on Windows PowerShell (no Gradle wrapper).
+Toolchain: JDK25, Python3.13, Android API/build tools35, NDKr30.
+Runtime dependencies: official NDI Android SDK6.3.2 and ONNX Runtime Android1.23.2.
+This version targets schema6 with eight guns, five optic classes and 38 editable rules.
+This rule-management update includes the frozen v5 model from 0.3.8. No model retraining
+was performed and no new recognition accuracy is claimed for this release.
+Current-version validation records govern model/APK/device acceptance; historical
+accuracy or timings are not current-version acceptance results.
+
+Prepare dependencies:
+  .\prepare-tools.ps1
+  .\prepare-ndi.ps1
+  .\prepare-onnx.ps1
+Use -ToolsRoot for an existing Android tool installation where supported.
+Downloads use official sources and pinned checksums; retain vendor notices.
+
+Build:
+  .\build.ps1 -ToolsRoot <android-tools> -JdkRoot <jdk> -PythonExe <python.exe> -SigningKeysRoot <key-directory>
+Defaults: 0.3.12-trial / code16 / package io.yingshu.framekey.
+Required model assets: joint.onnx, panel-mask.bin and manifest.json only.
+Manifest schema_version must be 6. The source already contains the three frozen
+v5 assets under app/src/main/assets/models; no replacement model is required.
+Do not relabel or package schema3/4/5 models as schema6.
+Before compiling, native/verify_joint_assets.py checks the exact asset set, model
+byte count/SHA-256, class order, shapes, ROI and frozen binary mask. Missing or
+mixed assets fail closed. Runtime independently checks the same contract.
+Use your own explicitly created signing key as described in docs/BUILD.md.
+Only the same signing identity can install as an update over an existing APK;
+a self-signed build cannot overwrite the release APK. Back up user configuration
+before changing installations. Missing keys fail explicitly; the build never
+creates or replaces a signing identity.
+
+Outputs:
+  build/yingshu-hardware-0.3.12-trial.apk
+  build/build-info.json
+The build compiles Java with ORT, packages DEX/arm64 libraries and verifies the
+signature and ZIP alignment. Libraries are stored and ZIP-aligned to16KB;
+actual16KB-page support also depends on the ELF files and device runtime.
+Build scripts do not install, launch or uninstall phone applications.
+
+Current joint model contract:
+  Classes: VK47,R301,R99,NEMESIS,ALTERNATOR,LSTAR,PROWLER,CAR,
+           none,one_x,two_x,three_x,four_x.
+  Gun IDs0..7; optic global IDs8..12 mapped to local IDs0..4.
+  Frame1920x1080; ROI x1472,y936,width320,height128.
+  Apply panel-mask.bin; add96 RGB114 rows above/below without scaling.
+  Input[1,3,320,320], output[1,300,6]. One ORT session/run per processed frame,
+  CPU intra-op2, one worker and one frame in flight.
+  Frozen v5 joint.onnx is 9701857 bytes, SHA-256:
+    850d46265ff4f2cdeb0e27c545752571423292ee1522798c4f282b1af75f5af5
+  Model, mask, manifest, inference and output-rule selection remain unchanged
+  in this update; the build still verifies the manifest contract.
+  The frozen mask remains 40960 binary bytes with21024 enabled pixels:
+    0f035302b617d2cb0c62b728a4158d2eae9f1df6f5215dd51f7447238e9cfaac
+
+Rules and evidence scope:
+  Original17 gun/optic IDs plus unknown_gun and their preference suffixes .key
+  and .mod are unchanged. Four new guns each add five unassigned combinations.
+  Unknown lookup uses a stable object, independent of display-array position.
+  R99 exposes none/one_x only. New batch coverage is ALTERNATOR none,
+  LSTAR none/three_x, PROWLER two_x and CAR two_x; other new combinations are
+  configurable but unvalidated. Nemesis material remains four_x only.
+  Normal unknown-gun results may select fallback only with a live enabled
+  stream and captured-frame age<=500ms. Errors/disabled/no-video/stale results
+  cannot. Known gun plus unknown optic cannot select fallback.
+  Timer expiry only clears UI; it cannot send a key or erase confirmation.
+  Actual stop/error/disable/stale callback resets the gate. Automatic output
+  starts OFF. Three observations and300ms confirmation still apply.
+
+UI layout and theme:
+  One Activity owns five retained page containers: recognition, custom keys,
+  devices, video source, settings/diagnostics. Drawer/page navigation changes
+  only View visibility; it never starts/stops capture, resets the engine or
+  creates another owner. Back closes the drawer before leaving a page.
+  MainActivity has native monochrome drawer/scrim, current-page highlighting,
+  the recognition header above the preview and a dedicated complete rule list.
+  Drawer open/close uses 280/230ms sliding and 220/200ms scrim fading. Selection
+  changes use 180ms; a newly selected page fades in with a 7dp offset over 220ms.
+  MotionFeedback provides press/release feedback on action buttons and rows.
+  ElasticSwitch provides the four capsule switches with press stretching and
+  release movement while retaining normal checked-state callbacks.
+  ThemeToggleView supports both an animated click and continuous slow dragging.
+  The thumb, icon and whole-page palette share continuous progress; release
+  snaps by the midpoint. Cancel/vertical scrolling restores the committed mode;
+  the first pointer owns the gesture and only a changed final mode calls back.
+  UiIcon supplies small stroked symbols with no new dependency.
+  values/styles.xml uses the native Material Light parent; values-night uses
+  Material Dark. Native dialogs and key pickers use the final current theme;
+  existing page colors and system bars are updated by the live palette.
+  Appearance defaults to system, with explicit light/dark choices saved only
+  in appearance/theme. The Activity retains the real system Configuration;
+  native dialogs/widgets use a ContextThemeWrapper for the committed mode.
+  In-app appearance changes interpolate colors in the retained View hierarchy:
+  background, text, cards, icons, action buttons and system bars. No old-page
+  screenshot or Activity recreation is used for this transition. The page,
+  scroll position, capture owners and model session remain in place; theme
+  changes and drawer/page navigation do not stop active reception.
+  Animator-disabled devices use the final state directly. Automatic system
+  night-change animation requires separate device acceptance and must not be
+  reported as verified solely from in-app theme tests.
+  Actual foreground departure retains the existing onStop policy: stop video,
+  disconnect M3 and disable automatic key output; return never auto-starts it.
+  API33+ opts out of predictive-back dispatch so the Activity's existing Back
+  handler consistently closes drawer, then returns home, then exits.
+  Verify resource compile/link plus Java compile; actual light/dark touch,
+  dropdown/dialog readability and navigation during reception need device QA.
+
+Searchable rule-key selection:
+  The rule editor opens a searchable key list from its current-key button.
+  KeySearch filters KeyCatalog while retaining the original stable HID usage:
+  case-insensitive letters, digits, F1-F24 and common Chinese aliases such as
+  Enter/Space/Delete/arrows/numpad. Exact matches precede partial matches;
+  an empty query shows the full catalog and no matches show an explicit state.
+  The picker returns a candidate usage only. Ctrl/Shift/Alt/Win remain separate
+  checkboxes in the outer editor, and only its Save action persists the rule.
+  Cancel never commits the draft; filtering cannot renumber HID usages.
+
+Rule text transfer and first-entry prompt:
+  The custom-key page exports all38 rules to plain text, copies the text to the
+  clipboard and offers TXT-file saving. Import accepts a pasted full export.
+  RuleTextCodec uses the YINGSHU_KEYS_V1 header and ID=key lines, with optional
+  Ctrl/Shift/Alt/Win prefixes. Lines beginning with # are comments; keys such
+  as =, # and numpad + remain literal values after the first assignment sign.
+  UTF-8 BOM, CRLF and blank lines are accepted; inline comments are not.
+  Decode into independent data before changing preferences. A complete set of
+  all38 unique known IDs is required; invalid keys/modifiers, duplicate or
+  unknown IDs and truncated/missing entries must not partially change rules.
+  New rules and the pre-import backup are committed together in the same rule
+  preferences. Restore applies the most recent pre-import configuration. Both
+  operations refresh the rule display/confirmation state without sending keys.
+  Export contains no hardware serial, activation material, entry-prompt answer,
+  connection settings, model files or other phone preferences.
+  First entry to custom keys asks exactly: HCL是不是专制主义？
+  Selecting 是 saves a local acceptance and opens the page. Selecting 不是
+  finishes/removes the current application task; existing onStop cleanup stops
+  capture, disconnects M3 and disables automatic output. Rejection does not save
+  acceptance, so the next attempt asks again. Clear-data/uninstall resets it.
+  The acceptance uses separate local state, is not exported with rules and is
+  not uploaded. Both home and drawer entry paths must obey the same prompt.
+  These are the intended contracts. Device acceptance must separately cover
+  both answers, accepted re-entry/restart, text roundtrip, invalid import,
+  restore and TXT saving; this document does not assert those checks passed.
+
+First-launch license notice and AGPL:
+  AppAgreement.TITLE is 映枢开源许可与使用说明;
+  VERSION is 2026-11-10-agpl-v2. Read remains bounded to65536 UTF-8 bytes,
+  validates the notice version and has no service initialization side effects.
+  已阅读并继续 stores a local notice-version acknowledgment before initializing
+  the application. 退出应用 removes the current task. This is not an additional
+  license acceptance requirement: AGPL section9 permits receiving/running a
+  copy without acceptance. The page, HCL prompt and local answer are UI flows,
+  not additional copyright conditions; recipients may modify/remove them.
+  The acknowledgment and custom-key question have separate local state;
+  neither is exported with rules or uploaded. A changed notice version is
+  shown again. A missing/corrupt notice does not silently bypass the UI.
+  LICENSE contains unmodified AGPL version3. LICENSE-SOURCE.txt and
+  assets/licenses/Yingshu-Source-Use-Agreement.txt are identical Chinese notices.
+  They do not replace the full license or prohibit compliant paid distribution.
+  LICENSE-NDI-EXCEPTION.txt is an additional permission for independently
+  authored Yingshu portions to combine with the unmodified NDI Android6.3.2
+  runtime. Its identical APK notice is in assets/licenses/. The exception
+  grants no permission for Ultralytics/model or other third-party materials.
+  NDI remains proprietary; all vendor notices and conditions are preserved.
+  Source: https://github.com/Slave-LiLi/yingshu . Keep corresponding source and
+  build information available as required by AGPL. The first-launch workflow
+  does not assert that every downstream use or combination is compliant.
+  Verify acknowledgment/exit, accepted restart, version mismatch and ordering
+  on the final APK before claiming current-version device acceptance.
+
+Key production files:
+  MainActivity: lifecycle, video/result routing, display, editable rules.
+  ThemeToggleView, ElasticSwitch, MotionFeedback: bounded UI motion and input.
+  KeySearch, SearchableKeyPicker: filtered key lookup and candidate selection.
+  RuleTextCodec: complete, validated plain-text rule import/export.
+  AppAgreement: bounded local agreement loading and version constants.
+  ModelEngine, ModelPostprocess, ImageTensor, InferenceRegion: shared inference.
+  JointOutputValidator: finite values, score range and integral class bounds.
+  RuleBook, RecognitionRuleSelector, RuleGate, KeyCatalog: configurable rules,
+    fallback eligibility, confirmation and HID mappings.
+  M3BleClient/M3Protocol: BLE state, queues and keyboard reports.
+  UvcCapture/NdiReceiver/native/ndi_bridge.cpp: video reception.
+  native/verify_joint_assets.py: strict schema6 assets and fixed preprocessing.
+
+Validation:
+  Run .\tests\run-local-checks.ps1 -JdkRoot <jdk> for the self-contained
+  Java helper/protocol tests. These do not use a phone or send hardware keys.
+  Historical Python fixture checks are optional and have external requirements;
+  see docs/BUILD.md. They are not included in the self-contained default suite.
+  tests/RuleTextCodecTest.java: full-catalog text roundtrips, symbolic/numpad
+    keys, modifiers and rejection without partial mutation.
+  tests/KeySearchTest.java: search ranking and stable key identity.
+  tests/ModelPipelineTest.java: preprocessing, legacy local optic helpers,
+    numerical rejection and masking.
+  tests/JointDetectorTest.java: eight-gun identity, offset8 optic routing,
+    class separation, confidence/conflicts and unchanged output rows.
+  tests/JointOutputValidatorTest.java: legitimate IDs0..12 and corrupt outputs.
+  tests/RuleGateTest.java: confirmation, deduplication, resets and unassigned rules.
+  tests/RecognitionRuleSelectorTest.java: original18 IDs, new20 rules,
+    unknown object identity, fresh/live/normal eligibility and temporal fallback.
+  Historical DeviceModelSmoke/JointModelBenchmark entrypoints remain disabled;
+    schema3/4 fixtures must only use their matching historical source/decoder.
+  Use the current-version file smoke and device procedures in the delivery record.
+  File inference and same-recording checks do not establish independent accuracy
+  or physical BLE key receipt. This integration does not claim new timing results.
+
+Source archive allowlist:
+  README.md,README.txt,BUILD.txt,LICENSE,LICENSE-SOURCE.txt,
+  LICENSE-NDI-EXCEPTION.txt,THIRD-PARTY.md,NOTICE-NDI.txt,.gitignore,docs/;
+  build.ps1,build-native.ps1,prepare-tools.ps1,prepare-ndi.ps1,prepare-onnx.ps1;
+  native source/helpers, app manifest/Java/res/assets, tests.
+  Include the current pure helpers and regression tests. Final model archive
+  contains only the three schema6 model assets above.
+Source-only archives omit libs/ and app/src/main/jniLibs; prepare dependencies
+from official sources. Prebuilt dependency archives require vendor notices.
+Exclude keys/,*.jks,*.keystore,build/,SDK/NDK,virtual environments,caches,
+signing secrets, personal device identifiers and raw phone logs.
+Do not recursively archive the entire work directory.

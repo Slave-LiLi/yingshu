@@ -1,0 +1,1171 @@
+/*
+ * This project-authored Yingshu integration is licensed under AGPL-3.0.
+ * The limited NDI linking permission is in LICENSE-NDI-EXCEPTION.txt.
+ * It does not grant exceptions for upstream or other third-party materials.
+ */
+package io.yingshu.framekey;
+
+import android.Manifest;
+import android.animation.ValueAnimator;
+import android.view.animation.PathInterpolator;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.view.Gravity;
+import android.view.ContextThemeWrapper;
+import android.view.ViewGroup;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
+
+import android.widget.CheckBox;
+import android.widget.EditText;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/** Foreground USB/NDI video receiver with an independent M3 link. No phone-camera APIs. */
+public final class MainActivity extends Activity {
+    private int BG, CARD, FG, MUTED, ACCENT, BORDER, WARN, DRAWER, SELECTED;
+    private boolean darkTheme;
+    private final ThemePalette palette=new ThemePalette();
+    private ThemeToggleView themeToggle;
+    private TextView appearanceLabel;
+    private final ValueAnimator[] navigationAnimations=new ValueAnimator[5];
+    private final float[] navigationSelection=new float[5];
+    private final GradientDrawable[] navigationFills=new GradientDrawable[5];
+    private final PathInterpolator motionEase=new PathInterpolator(.2f,0,0,1);
+    private int appearanceMode;
+    private static final String[] APPEARANCE_NAMES={"跟随系统（默认）","浅色","深色"};
+    private static final int REQUEST_BLE = 101, REQUEST_CAMERA = 102;
+    private static final int REQUEST_EXPORT = 103, REQUEST_ENABLE_BT = 104;
+    private static final int PAGE_HOME=0, PAGE_KEYS=1, PAGE_DEVICES=2, PAGE_SOURCES=3, PAGE_SETTINGS=4;
+    private static final String[] PAGE_TITLES={"识别","自定义按键","设备连接","视频源","设置与诊断"};
+    private final ScrollView[] pages=new ScrollView[PAGE_TITLES.length];
+    private final LinearLayout[] navigationRows=new LinearLayout[PAGE_TITLES.length];
+    private FrameLayout appRoot, pageHost;
+    private LinearLayout appBody, drawerPanel;
+    private View drawerScrim;
+    private TextView pageTitle;
+    private ImageButton menuButton;
+    private boolean drawerOpen;
+    private int currentPage;
+    private Button sourceRunButton;
+    private M3BleClient ble;
+    private UsbProbe usb;
+    private UvcCapture uvc;
+    private NdiReceiver ndi;
+    private VideoPreview videoPreview;
+    private Spinner videoKind, videoSources;
+    private EditText ndiHost;
+    private LinearLayout ndiOptions;
+    private TextView videoState, videoStats;
+    private Button runVideoButton, refreshVideoButton;
+    private ElasticSwitch previewSwitch, ecoSwitch;
+    private final ArrayList<UsbProbe.DeviceInfo> usbChoices = new ArrayList<>();
+    private final ArrayList<NdiReceiver.Source> ndiChoices = new ArrayList<>();
+    private final ArrayList<String> displayedSourceIds = new ArrayList<>();
+    private int videoMode;
+    private boolean captureRequested, pendingVideoUsb;
+    private String lastVideo = "未启动";
+    private long lastStatsLog;
+    private long modelTimingStart, modelTimingCount;
+    private double modelTimingPre, modelTimingRun, modelTimingPost, modelTimingAge;
+    private LinearLayout bleDevices, usbDevices;
+    private TextView bleState, bleDetail, usbState, usbDetail, logView, notificationView;
+    private Button scanButton, disconnectButton, testButton;
+    private final Map<String,String[]> discovered = new LinkedHashMap<>();
+    private final ArrayList<String> logs = new ArrayList<>();
+    private String phase = "IDLE", serial = "", selectedAddress = "", lastUsb = "尚未检查";
+    private int pendingUsb = -1;
+    private boolean destroyed,appInitialized,pendingKeysQuestion;
+    private AlertDialog agreementDialog,keysQuestionDialog;
+    private Button restoreRulesButton;
+    private String pendingRuleExport;
+    private static final int REQUEST_RULE_EXPORT=105,REQUEST_RULE_IMPORT=106;
+    private static final String RULE_BACKUP="last-import-backup-v1";
+
+    private File sessionLog;
+    private ModelEngine modelEngine;
+    private final RuleBook ruleBook = new RuleBook();
+    private final RuleGate ruleGate = new RuleGate();
+    private ElasticSwitch recognitionSwitch, outputSwitch;
+    private TextView modelStatus, modelResult, outputStatus, previewRecognition;
+    private LinearLayout ruleRows;
+    private boolean videoLive;
+    private String lastRecognition = "等待画面";
+    private RuleBook.Rule recognizedRule;
+    private final android.os.Handler recognitionExpiry=new android.os.Handler(android.os.Looper.getMainLooper());
+    private long recognitionDisplayToken;
+
+    @Override protected void attachBaseContext(Context base) {
+        int saved=base.getSharedPreferences("appearance",Context.MODE_PRIVATE).getInt("theme",0);
+        appearanceMode=saved>=0&&saved<APPEARANCE_NAMES.length?saved:0;
+        // Keep the Activity attached to real system configuration. Individual native
+        // dialogs/widgets use themedContext(), so switching back to system is live.
+        super.attachBaseContext(base);
+    }
+
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);configureAppearance();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        pendingRuleExport=state==null?null:state.getString("pending-rule-export");
+        if(!agreementAccepted()){showAgreement(state,true);return;}
+        initializeApp(state);
+    }
+    private boolean agreementAccepted(){return AppAgreement.VERSION.equals(getSharedPreferences("startup-agreement",MODE_PRIVATE).getString("accepted-version",""));}
+    private boolean keyQuestionAccepted(){return getSharedPreferences("custom-keys-access",MODE_PRIVATE).getBoolean("accepted",false);}
+    private void initializeApp(Bundle state){
+        if(appInitialized||destroyed||isFinishing())return;
+        appInitialized=true;
+        currentPage=state==null?PAGE_HOME:Math.max(0,Math.min(PAGE_TITLES.length-1,state.getInt("selected-page",PAGE_HOME)));
+        if(currentPage==PAGE_KEYS&&!keyQuestionAccepted()){currentPage=PAGE_HOME;pendingKeysQuestion=true;}
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        sessionLog = new File(getFilesDir(), "hardware-session.log");
+        try { new FileOutputStream(sessionLog, false).close(); } catch (Exception ignored) { }
+        videoMode=getPreferences(MODE_PRIVATE).getInt("videoMode",0);
+        loadRules();
+        makeUi();
+        uvc = new UvcCapture(this,new UvcCapture.Listener() {
+            @Override public void onState(String p,String detail) { captureState(0,p,detail); }
+            @Override public void onFrame(Bitmap frame) { receiveFrame(0,frame); }
+            @Override public void onStats(String stats) { captureStats(0,stats); }
+            @Override public void onLog(String line) { log("UVC "+line); }
+        });
+        ndi = new NdiReceiver(this,new NdiReceiver.Listener() {
+            @Override public void onSources(List<NdiReceiver.Source> sources) {
+                if(destroyed)return;ndiChoices.clear();ndiChoices.addAll(sources);
+                if(videoMode==1&&!captureRequested)updateSourceChoices();
+                log("NDI_SOURCES count="+sources.size());
+            }
+            @Override public void onState(String p,String detail) { captureState(1,p,detail); }
+            @Override public void onFrame(NdiReceiver.Frame frame) { receiveNdiFrame(frame); }
+            @Override public void onStats(String stats) { captureStats(1,stats); }
+            @Override public void onLog(String line) { log("NDI "+line); }
+        });
+        ble = new M3BleClient(this, new M3BleClient.Listener() {
+            @Override public void onState(String p, String detail) {
+                if (destroyed) return;
+                phase = p;
+                if (!"READY".equals(p)) ruleGate.reset();
+                bleState.setText(stateName(p));
+                themeText(bleState,"READY".equals(p) ? ACCENT : ("ERROR".equals(p) ? WARN : FG));
+                bleDetail.setText(detail);
+                scanButton.setText("SCANNING".equals(p) ? "停止扫描" : "扫描 M3");
+                boolean active = "CONNECTING".equals(p) || "DISCOVERING".equals(p) || "SUBSCRIBING".equals(p) || "HANDSHAKING".equals(p) || "READY".equals(p);
+                scanButton.setEnabled(!active);
+                disconnectButton.setEnabled(active);
+                testButton.setEnabled("READY".equals(p));
+                if (!"READY".equals(p)) serial = "";
+                log("BLE_STATE " + p + " | " + detail);
+                drawBleDevices();
+            }
+            @Override public void onDevice(String address, String name, int rssi) {
+                if (destroyed) return;
+                boolean firstDiscovery = !discovered.containsKey(address);
+                discovered.put(address, new String[]{name, String.valueOf(rssi)});
+                // Keep buttons stable while advertisements arrive; refresh RSSI when scanning ends.
+                if (firstDiscovery) drawBleDevices();
+            }
+            @Override public void onLog(String message) { log("BLE " + message); }
+            @Override public void onReady(String value) {
+                serial = value;
+                bleDetail.setText("序列号 " + value + "\n设备已响应握手；尚未验证接收端按键。");
+                log("HANDSHAKE_OK serial=" + value);
+            }
+            @Override public void onNotification(byte[] data) {
+                notificationView.setText("最近通知  " + hex(data));
+            }
+        });
+        usb = new UsbProbe(this, new UsbProbe.Listener() {
+            @Override public void onDevices(List<UsbProbe.DeviceInfo> devices) {
+                usbChoices.clear();for(UsbProbe.DeviceInfo item:devices)if(item.uvc)usbChoices.add(item);
+                if(videoMode==0&&!captureRequested)updateSourceChoices();drawUsbDevices(devices);
+            }
+            @Override public void onLog(String message) { log("USB " + message); }
+            @Override public void onResult(String status, String detail) {
+                if (destroyed) return;
+                lastUsb = status + " | " + detail;
+                usbState.setText(usbName(status));
+                themeText(usbState,"OPENED".equals(status) ? ACCENT : FG);
+                usbDetail.setText(compactUsbDetail(status, detail));
+                log("USB_STATE " + status + " | " + detail);
+                if(pendingVideoUsb&&captureRequested&&videoMode==0) {
+                    if("OPENED".equals(status)) {
+                        int selected=pendingUsb;pendingVideoUsb=false;
+                        uvc.setPreviewEnabled(previewSwitch.isChecked());uvc.start(selected,ecoSwitch.isChecked());
+                    } else if("PERMISSION_DENIED".equals(status)||"ERROR".equals(status)||"NO_DEVICE".equals(status)) {
+                        captureState(0,"ERROR",detail);
+                    }
+                }
+            }
+        });
+        modelEngine = new ModelEngine(this,new ModelEngine.Listener() {
+            @Override public void onReady(String detail) { if(!destroyed){modelStatus.setText("八枪模型已加载 · 38 项按键规则");log("MODEL_READY "+detail);} }
+            @Override public void onResult(ModelEngine.Result result) { receiveRecognition(result); }
+            @Override public void onError(String detail) { if(!destroyed){modelStatus.setText(detail);clearRecognitionDisplay("识别暂不可用");log("MODEL "+detail);} }
+        });
+        log("APP_START io.yingshu.framekey 0.3.12-trial / " + Build.MANUFACTURER + " " + Build.MODEL + " / Android " + Build.VERSION.RELEASE + " API " + Build.VERSION.SDK_INT);
+        log("SCOPE USB/NDI + eight-gun trial; keys unassigned by default; output toggle starts off");
+        usb.refresh();
+        videoMode=getPreferences(MODE_PRIVATE).getInt("videoMode",0);
+        videoKind.setSelection(videoMode);
+        ndiOptions.setVisibility(videoMode==1?View.VISIBLE:View.GONE);
+        updateSourceChoices();
+        // The source page may remain hidden, so its first Spinner layout event
+        // must not be the only trigger for the previous NDI mode's discovery.
+        if(videoMode==1)refreshSources();
+        if(pendingKeysQuestion){pendingKeysQuestion=false;appRoot.post(()->{if(!destroyed&&!isFinishing())showKeysQuestion();});}
+    }
+
+    private void configureAppearance() {
+        darkTheme=appearanceMode==0?systemDark():appearanceMode==2;
+        setThemeProgress(darkTheme?1:0);
+    }
+    private boolean systemDark(){
+        return (getApplicationContext().getResources().getConfiguration().uiMode&Configuration.UI_MODE_NIGHT_MASK)==Configuration.UI_MODE_NIGHT_YES;
+    }
+    private void setThemeProgress(float progress){
+        palette.setProgress(progress);
+        BG=palette.color(ThemePalette.BG);CARD=palette.color(ThemePalette.CARD);FG=palette.color(ThemePalette.FG);
+        MUTED=palette.color(ThemePalette.MUTED);ACCENT=palette.color(ThemePalette.ACCENT);BORDER=palette.color(ThemePalette.BORDER);
+        WARN=palette.color(ThemePalette.WARN);DRAWER=palette.color(ThemePalette.DRAWER);SELECTED=palette.color(ThemePalette.SELECTED);
+        palette.paint();
+        getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
+        boolean darkBars=progress>=.5f;
+        int flags=darkBars?0:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if(Build.VERSION.SDK_INT>=26&&!darkBars)flags|=View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        getWindow().getDecorView().setSystemUiVisibility(flags);
+    }
+    private Context themedContext(){
+        ContextThemeWrapper context=new ContextThemeWrapper(this,R.style.AppTheme);
+        Configuration config=new Configuration();
+        config.uiMode=darkTheme?Configuration.UI_MODE_NIGHT_YES:Configuration.UI_MODE_NIGHT_NO;
+        context.applyOverrideConfiguration(config);return context;
+    }
+    @Override public void onConfigurationChanged(Configuration config){
+        super.onConfigurationChanged(config);
+        if(appearanceMode==0){
+            darkTheme=(config.uiMode&Configuration.UI_MODE_NIGHT_MASK)==Configuration.UI_MODE_NIGHT_YES;
+            refreshAppearanceLabel();
+            if(themeToggle!=null)themeToggle.animateDark(darkTheme);else setThemeProgress(darkTheme?1:0);
+        }
+    }
+    private void refreshAppearanceLabel(){
+        if(appearanceLabel!=null)appearanceLabel.setText(appearanceMode==0?"跟随系统\n"+(darkTheme?"当前深色":"当前浅色"):APPEARANCE_NAMES[appearanceMode]);
+    }
+
+    private void makeUi() {
+        appRoot=new FrameLayout(this);appRoot.setBackground(shape(BG,0,0));
+        if(Build.VERSION.SDK_INT>=35)appRoot.setOnApplyWindowInsetsListener((v,insets)->{
+            v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;
+        });
+        appBody=vertical();appRoot.addView(appBody,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout top=horizontal();top.setPadding(dp(12),dp(5),dp(16),dp(5));
+        menuButton=iconButton(UiIcon.MENU,"打开导航菜单");menuButton.setOnClickListener(v->setDrawerOpen(true));
+        top.addView(menuButton,new LinearLayout.LayoutParams(dp(44),dp(44)));
+        pageTitle=text(PAGE_TITLES[currentPage],18,FG,true);
+        LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1);titleParams.leftMargin=dp(9);
+        top.addView(pageTitle,titleParams);
+        TextView brand=text("映枢",12,MUTED,false);top.addView(brand);
+        appBody.addView(top,new LinearLayout.LayoutParams(-1,dp(58)));
+        pageHost=new FrameLayout(this);appBody.addView(pageHost,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout home=createPage(PAGE_HOME),keys=createPage(PAGE_KEYS),devices=createPage(PAGE_DEVICES),
+                sources=createPage(PAGE_SOURCES),settings=createPage(PAGE_SETTINGS);
+        makeHomePage(home);makeKeysPage(keys);makeDevicesPage(devices);makeVideoSourcePage(sources);makeSettingsPage(settings);
+        bindVideoControls();makeDrawer();setContentView(appRoot);showPage(currentPage);
+    }
+
+    private LinearLayout createPage(int index) {
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);
+        scroll.setVerticalScrollBarEnabled(false);pages[index]=scroll;
+        LinearLayout content=vertical();content.setPadding(dp(20),dp(14),dp(20),dp(28));
+        scroll.addView(content,new ScrollView.LayoutParams(-1,-2));
+        pageHost.addView(scroll,new FrameLayout.LayoutParams(-1,-1));return content;
+    }
+
+    private void makeDrawer() {
+        drawerScrim=new View(this);drawerScrim.setBackgroundColor(Color.argb(120,0,0,0));
+        drawerScrim.setContentDescription("关闭导航菜单");drawerScrim.setOnClickListener(v->setDrawerOpen(false));
+        appRoot.addView(drawerScrim,new FrameLayout.LayoutParams(-1,-1));
+        drawerPanel=vertical();drawerPanel.setBackground(shape(DRAWER,0,0));drawerPanel.setElevation(dp(12));
+        drawerPanel.setPadding(dp(12),dp(7),dp(12),dp(20));drawerPanel.setClickable(true);
+        int width=Math.min(dp(304),Math.max(dp(200),getResources().getDisplayMetrics().widthPixels-dp(56)));
+        FrameLayout.LayoutParams drawerParams=new FrameLayout.LayoutParams(width,-1,Gravity.LEFT);
+        appRoot.addView(drawerPanel,drawerParams);
+        LinearLayout heading=horizontal();heading.setPadding(dp(12),0,0,dp(12));
+        heading.addView(text("映枢",20,FG,true),new LinearLayout.LayoutParams(0,-2,1));
+        ImageButton close=iconButton(UiIcon.CLOSE,"关闭导航菜单");close.setOnClickListener(v->setDrawerOpen(false));
+        heading.addView(close,new LinearLayout.LayoutParams(dp(44),dp(44)));drawerPanel.addView(heading);
+        ScrollView navigation=new ScrollView(this);navigation.setFillViewport(false);navigation.setVerticalScrollBarEnabled(false);
+        LinearLayout items=vertical();navigation.addView(items);drawerPanel.addView(navigation,new LinearLayout.LayoutParams(-1,0,1));
+        int[] icons={UiIcon.RECOGNIZE,UiIcon.KEYBOARD,UiIcon.DEVICE,UiIcon.VIDEO,UiIcon.SETTINGS};
+        for(int i=0;i<PAGE_TITLES.length;i++){
+            final int destination=i;LinearLayout row=horizontal();navigationRows[i]=row;
+            row.setPadding(dp(14),dp(14),dp(12),dp(14));row.setMinimumHeight(dp(54));
+            ImageView icon=new ImageView(this);icon.setImageDrawable(themedIcon(icons[i],FG,22));
+            row.addView(icon,new LinearLayout.LayoutParams(dp(22),dp(22)));
+            TextView title=text(PAGE_TITLES[i],15,FG,false);LinearLayout.LayoutParams labelParams=new LinearLayout.LayoutParams(0,-2,1);labelParams.leftMargin=dp(14);
+            row.addView(title,labelParams);row.setFocusable(true);row.setOnClickListener(v->showPage(destination));MotionFeedback.attach(row);
+            LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.bottomMargin=dp(4);items.addView(row,rp);
+        }
+        TextView version=text("0.3.12 · 八枪试训",11,MUTED,false);version.setPadding(dp(14),dp(16),dp(14),0);drawerPanel.addView(version);
+        setDrawerOpen(false);
+    }
+
+    /** Navigation changes visibility only; video and inference retain their existing owners. */
+    private void showPage(int index) {
+        if(index<0||index>=pages.length||destroyed||isFinishing())return;
+        if(index==PAGE_KEYS&&!keyQuestionAccepted()){setDrawerOpen(false);showKeysQuestion();return;}
+        int previous=currentPage;currentPage=index;
+        for(int i=0;i<pages.length;i++){
+            pages[i].animate().cancel();pages[i].setAlpha(1);pages[i].setTranslationY(0);
+            pages[i].setVisibility(i==index?View.VISIBLE:View.GONE);
+            if(navigationRows[i]!=null){
+                navigationRows[i].setSelected(i==index);animateNavigationSelection(i,i==index?1f:0f);
+                navigationRows[i].setContentDescription(PAGE_TITLES[i]+(i==index?"，当前页面":""));
+            }
+        }
+        pageTitle.setText(PAGE_TITLES[index]);setDrawerOpen(false);
+        if(previous!=index&&pageHost.isLaidOut()&&ValueAnimator.areAnimatorsEnabled()){
+            pages[index].setAlpha(.25f);pages[index].setTranslationY(dp(7));
+            pages[index].animate().alpha(1f).translationY(0).setDuration(220).setInterpolator(motionEase).start();
+        }
+    }
+    private void animateNavigationSelection(int index,float target){
+        if(navigationAnimations[index]!=null){navigationAnimations[index].cancel();navigationAnimations[index]=null;}
+        if(!drawerOpen||!appRoot.isLaidOut()||!ValueAnimator.areAnimatorsEnabled()){
+            navigationSelection[index]=target;paintNavigationSelection(index);return;
+        }
+        ValueAnimator animator=ValueAnimator.ofFloat(navigationSelection[index],target);navigationAnimations[index]=animator;
+        animator.setDuration(180);animator.setInterpolator(motionEase);
+        animator.addUpdateListener(value->{navigationSelection[index]=(Float)value.getAnimatedValue();paintNavigationSelection(index);});animator.start();
+    }
+    private void paintNavigationSelection(int index){
+        if(navigationFills[index]==null){
+            navigationFills[index]=roleShape(ThemePalette.SELECTED,14);
+            navigationRows[index].setBackground(themedRipple(navigationFills[index],14,false));
+        }
+        navigationFills[index].setAlpha(Math.round(255*navigationSelection[index]));
+    }
+    private void setDrawerOpen(boolean open) {
+        boolean wasOpen=drawerOpen;drawerOpen=open;
+        if(drawerPanel==null)return;
+        drawerPanel.animate().cancel();drawerScrim.animate().cancel();
+        boolean animate=appRoot.isLaidOut()&&ValueAnimator.areAnimatorsEnabled();
+        int drawerWidth=Math.max(drawerPanel.getWidth(),drawerPanel.getLayoutParams().width);
+        if(open){
+            if(drawerPanel.getVisibility()!=View.VISIBLE){drawerPanel.setTranslationX(-drawerWidth);drawerScrim.setAlpha(0);}
+            drawerPanel.setVisibility(View.VISIBLE);drawerScrim.setVisibility(View.VISIBLE);
+            if(animate){
+                drawerPanel.animate().translationX(0).setDuration(280).setInterpolator(motionEase).start();
+                drawerScrim.animate().alpha(1).setDuration(220).start();
+            }else{drawerPanel.setTranslationX(0);drawerScrim.setAlpha(1);}
+        }else if(animate&&(wasOpen||drawerPanel.getVisibility()==View.VISIBLE)){
+            drawerPanel.animate().translationX(-drawerWidth).setDuration(230).setInterpolator(motionEase)
+                .withEndAction(()->{if(!drawerOpen){drawerPanel.setVisibility(View.GONE);drawerScrim.setVisibility(View.GONE);}}).start();
+            drawerScrim.animate().alpha(0).setDuration(200).start();
+        }else{drawerPanel.setVisibility(View.GONE);drawerScrim.setVisibility(View.GONE);drawerPanel.setTranslationX(0);drawerScrim.setAlpha(0);}
+        appBody.setImportantForAccessibility(open?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+        if(open){drawerPanel.setFocusableInTouchMode(true);drawerPanel.requestFocus();}
+        else if(menuButton!=null)menuButton.requestFocus();
+    }
+
+    private void makeHomePage(LinearLayout content) {
+        marginAdd(content,text("当前识别",12,MUTED,false),0,6);
+        previewRecognition=text("",20,FG,true);marginAdd(content,previewRecognition,0,16);updatePreviewRecognition();
+        videoPreview=new VideoPreview(this);videoPreview.setBackground(roleShape(ThemePalette.PREVIEW,18));
+        videoPreview.setClipToOutline(true);content.addView(videoPreview,new LinearLayout.LayoutParams(-1,-2));
+        videoState=text("未启动",12,MUTED,false);marginAdd(content,videoState,12,14);
+        LinearLayout actions=horizontal();runVideoButton=button("开始接收",true);
+        runVideoButton.setOnClickListener(v->{if(captureRequested)stopVideo("已停止");else startVideo();});
+        actions.addView(runVideoButton,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button source=button("选择视频源",false);source.setOnClickListener(v->showPage(PAGE_SOURCES));
+        LinearLayout.LayoutParams other=new LinearLayout.LayoutParams(0,dp(48),1);other.leftMargin=dp(10);actions.addView(source,other);
+        marginAdd(content,actions,0,20);makeModelCard(content);
+        Button customKeys=button("自定义按键",false);customKeys.setOnClickListener(v->showPage(PAGE_KEYS));marginAdd(content,customKeys,4,8);
+        marginAdd(content,text("枪械、倍镜与配置按键显示在视频上方。",11,MUTED,false),0,0);
+    }
+
+    private void makeKeysPage(LinearLayout content) {
+        marginAdd(content,text("为每种枪械与倍镜设置按键",18,FG,true),0,6);
+        marginAdd(content,text("38 项规则 · 点击任一项编辑。未分配的规则不会发送按键。",12,MUTED,false),0,16);
+        LinearLayout transfer=horizontal();
+        Button export=button("导出文本",false);export.setOnClickListener(v->exportRulesText());
+        Button incoming=button("导入文本",false);incoming.setOnClickListener(v->showRulesImport(null));
+        transfer.addView(export,new LinearLayout.LayoutParams(0,dp(46),1));
+        LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(0,dp(46),1);ip.leftMargin=dp(10);transfer.addView(incoming,ip);
+        marginAdd(content,transfer,0,8);
+        restoreRulesButton=button("恢复导入前配置",false);restoreRulesButton.setOnClickListener(v->restoreRulesBackup());
+        marginAdd(content,restoreRulesButton,0,14);refreshRuleBackup();
+        ruleRows=vertical();content.addView(ruleRows);drawRuleRows();
+        marginAdd(content,text("“未识别到枪械”仅在正常识别结果没有确定枪型时使用；已识别枪械但倍镜不确定时不会触发。",12,MUTED,false),16,0);
+    }
+
+    private void makeDevicesPage(LinearLayout content) {
+        LinearLayout bc=card(); label(bc,"M3 蓝牙");
+        bleState=text("等待连接",18,FG,true); marginAdd(bc,bleState,10,0);
+        bleDetail=text("扫描附近名称包含 HCL 的设备，选择后完成握手。",12,MUTED,false); marginAdd(bc,bleDetail,7,12);
+        LinearLayout actions=horizontal();
+        scanButton=button("扫描 M3",true); scanButton.setContentDescription("扫描 M3");
+        scanButton.setOnClickListener(v -> { if ("SCANNING".equals(phase)) ble.stopScan(); else scan(); });
+        disconnectButton=button("断开",false); disconnectButton.setEnabled(false);
+        disconnectButton.setOnClickListener(v -> ble.disconnect());
+        actions.addView(scanButton,new LinearLayout.LayoutParams(0,dp(46),1));
+        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(dp(78),dp(46)); right.leftMargin=dp(9);
+        actions.addView(disconnectButton,right); bc.addView(actions);
+        bleDevices=vertical(); marginAdd(bc,bleDevices,8,0);
+        notificationView=text("尚未收到设备通知",11,MUTED,false); marginAdd(bc,notificationView,8,0);
+        testButton=button("手动测试一个按键…",false); testButton.setEnabled(false);
+        testButton.setOnClickListener(v -> presentDialog(new AlertDialog.Builder(themedContext()).setTitle("发送一次 F13 测试键")
+            .setMessage("请先在接收端打开键盘测试工具。\n\n本次会通过 M3 发送一次 F13；如果外设给此键设置了宏，也可能触发该宏。发送完成仅表示链路已提交，请以接收端结果为准。")
+            .setNegativeButton("取消",null).setPositiveButton("发送一次",(dialog,which) -> ble.sendTestKey(0x68)).create()));
+        marginAdd(bc,testButton,11,0);
+        marginAdd(content,bc,0,13);
+
+        LinearLayout uc=card(); label(uc,"USB 采集设备");
+        usbState=text("检查 USB 设备",18,FG,true); marginAdd(uc,usbState,10,0);
+        usbDetail=text("仅检查外接 UVC 采集设备，不使用手机前后摄像头。",12,MUTED,false); marginAdd(uc,usbDetail,7,10);
+        Button refresh=button("刷新 USB 设备",false); refresh.setOnClickListener(v -> usb.refresh()); uc.addView(refresh,new LinearLayout.LayoutParams(-1,dp(44)));
+        usbDevices=vertical(); marginAdd(uc,usbDevices,8,0);
+        TextView usbNote=text("在这里授权采集卡，再到“视频源”选择 USB 输入。",11,MUTED,false); marginAdd(uc,usbNote,10,0);
+        marginAdd(content,uc,0,13);
+
+    }
+
+    private void makeSettingsPage(LinearLayout content) {
+        LinearLayout appearance=card();label(appearance,"外观");
+        LinearLayout themeRow=horizontal();
+        appearanceLabel=text("",14,FG,true);refreshAppearanceLabel();
+        themeRow.addView(appearanceLabel,new LinearLayout.LayoutParams(0,-2,1));
+        themeToggle=new ThemeToggleView(this);themeToggle.setDark(darkTheme);
+        themeToggle.setOnThemeProgressListener(progress->{if(!destroyed)setThemeProgress(progress);});
+        themeToggle.setOnThemeChangedListener(dark->{if(!destroyed)applyAppearance(dark?2:1);});
+        themeRow.addView(themeToggle,new LinearLayout.LayoutParams(dp(144),dp(84)));marginAdd(appearance,themeRow,2,0);
+        marginAdd(appearance,text("点击或拖动太阳／月亮，界面颜色同步渐变；“选择外观”可恢复跟随系统。",12,MUTED,false),6,12);
+        Button appearanceButton=button("选择外观",false);appearanceButton.setOnClickListener(v->chooseAppearance());marginAdd(appearance,appearanceButton,0,0);
+        Button agreement=button("查看开源许可",false);agreement.setOnClickListener(v->showAgreement(null,false));marginAdd(appearance,agreement,10,0);
+        marginAdd(content,appearance,0,18);
+        LinearLayout playback=card();label(playback,"视频与性能");
+        previewSwitch=themedSwitch();previewSwitch.setText("显示视频预览");previewSwitch.setTextSize(14);
+        previewSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("preview",true));
+        ecoSwitch=themedSwitch();ecoSwitch.setText("节能模式");ecoSwitch.setTextSize(14);
+        ecoSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("eco",false));
+        playback.addView(previewSwitch,new LinearLayout.LayoutParams(-1,dp(52)));playback.addView(ecoSwitch,new LinearLayout.LayoutParams(-1,dp(52)));
+        marginAdd(playback,text("关闭预览仍可识别；节能模式降低画面投递频率。",12,MUTED,false),4,12);
+        videoStats=text("选择输入后点击开始接收",11,MUTED,false);marginAdd(playback,videoStats,0,0);marginAdd(content,playback,0,18);
+        LinearLayout model=card();label(model,"识别模型");
+        modelStatus=text("正在加载八枪模型…",14,FG,true);marginAdd(model,modelStatus,8,7);
+        modelResult=text("等待 1920 × 1080 游戏画面",12,MUTED,false);marginAdd(model,modelResult,0,10);
+        marginAdd(model,text("VK / R301 / 复仇女神 / 转换者 / L-STAR / 猎兽 / CAR：无镜、1 / 2 / 3 / 4 倍；R99：无镜、1 倍。2–4 倍镜按 4 倍处理。",12,MUTED,false),0,10);
+        marginAdd(model,text("本批新增素材仅覆盖：转换者无镜；L-STAR 无镜和 3 倍；猎兽、CAR 为 2 倍。新枪其他倍镜尚未验证；复仇女神仍仅有 2–4 倍镜素材。",12,MUTED,false),0,0);
+        marginAdd(content,model,0,18);
+        LinearLayout lc=card(); label(lc,"诊断记录");
+        marginAdd(lc,text("记录连接阶段和错误，便于后续排查。",12,MUTED,false),7,9);
+        LinearLayout logActions=horizontal();
+        Button export=button("导出记录",false); export.setOnClickListener(v -> exportReport());
+        Button copy=button("复制摘要",false); copy.setOnClickListener(v -> {
+            ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("映枢连接摘要",summary()));
+            Toast.makeText(this,"已复制连接摘要",Toast.LENGTH_SHORT).show();
+        });
+        logActions.addView(export,new LinearLayout.LayoutParams(0,dp(44),1));
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,dp(44),1); cp.leftMargin=dp(8); logActions.addView(copy,cp);lc.addView(logActions);
+        logView=text("准备就绪",10,MUTED,false); logView.setTypeface(Typeface.MONOSPACE);logView.setTextIsSelectable(true);
+        marginAdd(lc,logView,12,0); content.addView(lc);
+        marginAdd(content,text("离开应用会停止视频并断开 M3 · 不自动启动",10,MUTED,false),18,0);
+    }
+
+    private void chooseAppearance() {
+        final int[] choice={appearanceMode};
+        AlertDialog.Builder dialog=new AlertDialog.Builder(themedContext()).setTitle("选择外观")
+                .setSingleChoiceItems(APPEARANCE_NAMES,appearanceMode,(d,which)->choice[0]=which)
+                .setNegativeButton("取消",null)
+                .setPositiveButton("保存",(d,which)->{
+                    applyAppearance(choice[0]);
+                });
+        presentDialog(dialog.create());
+    }
+
+    private void applyAppearance(int mode){
+        if(mode==appearanceMode)return;
+        if(!getSharedPreferences("appearance",MODE_PRIVATE).edit().putInt("theme",mode).commit()){
+            if(themeToggle!=null)themeToggle.setDark(darkTheme);
+            Toast.makeText(this,"保存失败，原外观保留",Toast.LENGTH_SHORT).show();return;
+        }
+        appearanceMode=mode;darkTheme=mode==0?systemDark():mode==2;refreshAppearanceLabel();
+        // Retain the same hierarchy, model and hardware owners; only their UI palette changes.
+        themeToggle.animateDark(darkTheme);
+    }
+    private void showAgreement(Bundle saved,boolean required){
+        if(destroyed||isFinishing()||(agreementDialog!=null&&agreementDialog.isShowing()))return;
+        final String agreement;
+        try{agreement=AppAgreement.read(this);}catch(Exception error){
+            Toast.makeText(this,"无法读取许可说明，请重新安装完整安装包",Toast.LENGTH_LONG).show();if(required)finishAndRemoveTask();return;
+        }
+        if(required){
+            FrameLayout welcome=new FrameLayout(this);welcome.setBackgroundColor(BG);
+            TextView heading=text("映枢 · AGPL 开源",20,FG,true);heading.setGravity(Gravity.CENTER);
+            welcome.addView(heading,new FrameLayout.LayoutParams(-1,-1));setContentView(welcome);
+        }
+        TextView body=text(agreement,13,FG,false);body.setTextIsSelectable(true);body.setPadding(dp(22),dp(12),dp(22),dp(12));
+        ScrollView scroll=new ScrollView(themedContext());scroll.addView(body);
+        LinearLayout holder=vertical();holder.addView(scroll,new LinearLayout.LayoutParams(-1,Math.min(dp(420),getResources().getDisplayMetrics().heightPixels/2)));
+        AlertDialog.Builder builder=new AlertDialog.Builder(themedContext()).setTitle(AppAgreement.TITLE).setView(holder);
+        if(required)builder.setPositiveButton("已阅读并继续",null).setNegativeButton("退出应用",(dialog,which)->finishAndRemoveTask()).setCancelable(false);
+        else builder.setPositiveButton("关闭",null);
+        AlertDialog dialog=builder.create();agreementDialog=dialog;dialog.setCanceledOnTouchOutside(!required);
+        dialog.setOnDismissListener(d->{if(agreementDialog==dialog)agreementDialog=null;});presentDialog(dialog);
+        if(required)dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            android.content.SharedPreferences prefs=getSharedPreferences("startup-agreement",MODE_PRIVATE);String prior=prefs.getString("accepted-version",null);
+            if(!prefs.edit().putString("accepted-version",AppAgreement.VERSION).commit()){
+                android.content.SharedPreferences.Editor rollback=prefs.edit();if(prior==null)rollback.remove("accepted-version");else rollback.putString("accepted-version",prior);rollback.commit();
+                Toast.makeText(this,"无法保存确认，请重试",Toast.LENGTH_SHORT).show();return;
+            }
+            dialog.dismiss();initializeApp(saved);
+        });
+    }
+    private void showKeysQuestion(){
+        if(!appInitialized||destroyed||isFinishing()||(keysQuestionDialog!=null&&keysQuestionDialog.isShowing()))return;
+        AlertDialog dialog=new AlertDialog.Builder(themedContext())
+            .setMessage("HCL是不是专制主义？").setPositiveButton("是",null)
+            .setNegativeButton("不是",(d,which)->finishAndRemoveTask()).setCancelable(false).create();
+        keysQuestionDialog=dialog;dialog.setCanceledOnTouchOutside(false);
+        dialog.setOnDismissListener(d->{if(keysQuestionDialog==dialog)keysQuestionDialog=null;});presentDialog(dialog);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            android.content.SharedPreferences prefs=getSharedPreferences("custom-keys-access",MODE_PRIVATE);boolean had=prefs.contains("accepted"),prior=prefs.getBoolean("accepted",false);
+            if(!prefs.edit().putBoolean("accepted",true).commit()){
+                android.content.SharedPreferences.Editor rollback=prefs.edit();if(had)rollback.putBoolean("accepted",prior);else rollback.remove("accepted");rollback.commit();
+                Toast.makeText(this,"无法保存选择，请重试",Toast.LENGTH_SHORT).show();return;
+            }
+            dialog.dismiss();showPage(PAGE_KEYS);
+        });
+    }
+    private void refreshRuleBackup(){if(restoreRulesButton!=null)restoreRulesButton.setVisibility(getSharedPreferences("recognition-rules",MODE_PRIVATE).contains(RULE_BACKUP)?View.VISIBLE:View.GONE);}
+    private void exportRulesText(){
+        final String content=RuleTextCodec.encode(ruleBook);boolean copied=false;
+        try{((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("映枢按键配置",content));copied=true;}catch(Exception ignored){}
+        TextView body=text(content,11,FG,false);body.setTypeface(Typeface.MONOSPACE);body.setTextIsSelectable(true);body.setPadding(dp(18),dp(12),dp(18),dp(12));
+        ScrollView scroll=new ScrollView(themedContext());scroll.addView(body);LinearLayout holder=vertical();holder.addView(scroll,new LinearLayout.LayoutParams(-1,dp(280)));
+        presentDialog(new AlertDialog.Builder(themedContext()).setTitle(copied?"38 项按键已复制":"按键配置文本").setView(holder).setPositiveButton("关闭",null)
+            .setNeutralButton("保存 TXT",(dialog,which)->{
+                pendingRuleExport=content;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("text/plain");
+                intent.putExtra(Intent.EXTRA_TITLE,"映枢-按键配置.txt");startActivityForResult(intent,REQUEST_RULE_EXPORT);
+            }).create());
+    }
+    private void showRulesImport(String supplied){
+        if(!keyQuestionAccepted())return;
+        Context context=themedContext();LinearLayout form=new LinearLayout(context);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(20),dp(8),dp(20),0);
+        marginAdd(form,text("导入会替换全部 38 项按键，并保留导入前配置。不会导入协议确认或连接信息。",12,MUTED,false),0,10);
+        EditText input=new EditText(context);input.setContentDescription("按键配置文本");input.setGravity(Gravity.TOP);input.setTextSize(12);input.setTypeface(Typeface.MONOSPACE);input.setTextColor(FG);input.setHintTextColor(MUTED);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setHint("粘贴 YINGSHU_KEYS_V1 配置文本");
+        input.setBackground(shape(CARD,14,BORDER));input.setPadding(dp(12),dp(10),dp(12),dp(10));form.addView(input,new LinearLayout.LayoutParams(-1,dp(220)));
+        String initial=supplied;
+        if(initial==null){try{
+            ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);ClipData clip=clipboard.getPrimaryClip();
+            if(clip!=null&&clip.getItemCount()>0){CharSequence raw=clip.getItemAt(0).getText();if(raw!=null&&raw.length()<=65536&&raw.toString().replace("\uFEFF","").trim().startsWith("YINGSHU_KEYS_V1"))initial=raw.toString();}
+        }catch(Exception ignored){}}
+        if(initial!=null)input.setText(initial);
+        Button clear=button("清空文本",false);clear.setOnClickListener(v->input.setText(""));marginAdd(form,clear,8,8);
+        TextView error=text("",12,WARN,false);error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);form.addView(error);
+        AlertDialog dialog=new AlertDialog.Builder(context).setTitle("导入按键文本").setView(form).setNegativeButton("取消",null).setPositiveButton("导入",null)
+            .setNeutralButton("读取 TXT",(d,which)->{Intent open=new Intent(Intent.ACTION_OPEN_DOCUMENT);open.addCategory(Intent.CATEGORY_OPENABLE);open.setType("text/*");startActivityForResult(open,REQUEST_RULE_IMPORT);}).create();
+        presentDialog(dialog);dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN|WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        form.setFocusableInTouchMode(true);form.requestFocus();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{RuleTextCodec.Parsed parsed=RuleTextCodec.decode(input.getText().toString(),ruleBook);
+                if(applyRuleImport(parsed,false)){dialog.dismiss();Toast.makeText(this,"已导入 38 项，已分配 "+parsed.assignedCount+" 项",Toast.LENGTH_LONG).show();}
+                else error.setText("保存失败，原配置保留，请重试。");
+            }catch(IllegalArgumentException failure){error.setText(failure.getMessage());}
+        });
+    }
+    private boolean applyRuleImport(RuleTextCodec.Parsed parsed,boolean restoring){
+        android.content.SharedPreferences prefs=getSharedPreferences("recognition-rules",MODE_PRIVATE);Map<String,?> before=prefs.getAll();
+        android.content.SharedPreferences.Editor edit=prefs.edit();
+        if(restoring)edit.remove(RULE_BACKUP);else edit.putString(RULE_BACKUP,RuleTextCodec.encode(ruleBook));
+        for(RuleTextCodec.Entry entry:parsed.entries){edit.putInt(entry.id+".key",entry.usage);edit.putInt(entry.id+".mod",entry.modifiers);}
+        if(!edit.commit()){
+            android.content.SharedPreferences.Editor rollback=prefs.edit();
+            for(RuleBook.Rule rule:ruleBook.rules)for(String suffix:new String[]{".key",".mod"}){String key=rule.id+suffix;Object old=before.get(key);if(old instanceof Integer)rollback.putInt(key,(Integer)old);else rollback.remove(key);}
+            Object backup=before.get(RULE_BACKUP);if(backup instanceof String)rollback.putString(RULE_BACKUP,(String)backup);else rollback.remove(RULE_BACKUP);rollback.commit();return false;
+        }
+        loadRules();ruleGate.reset();drawRuleRows();updatePreviewRecognition();outputStatus.setText(idleOutputStatus());refreshRuleBackup();
+        log(restoring?"RULES_RESTORED count=38":"RULES_IMPORTED count=38");return true;
+    }
+    private void restoreRulesBackup(){
+        String backup=getSharedPreferences("recognition-rules",MODE_PRIVATE).getString(RULE_BACKUP,null);if(backup==null)return;
+        final RuleTextCodec.Parsed parsed;
+        try{parsed=RuleTextCodec.decode(backup,ruleBook);}catch(IllegalArgumentException error){Toast.makeText(this,"备份无效，原配置未改变",Toast.LENGTH_LONG).show();return;}
+        presentDialog(new AlertDialog.Builder(themedContext()).setTitle("恢复导入前配置？").setMessage("将恢复上次导入之前的全部 38 项按键。")
+            .setNegativeButton("取消",null).setPositiveButton("恢复",(d,which)->{if(applyRuleImport(parsed,true))Toast.makeText(this,"已恢复导入前配置",Toast.LENGTH_SHORT).show();else Toast.makeText(this,"恢复失败，原配置保留",Toast.LENGTH_LONG).show();}).create());
+    }
+    private String readRulesText(android.net.Uri uri) throws Exception{
+        try(java.io.InputStream input=getContentResolver().openInputStream(uri);java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){
+            if(input==null)throw new IllegalArgumentException("无法打开文本文件");byte[] buffer=new byte[4096];int n;
+            while((n=input.read(buffer))!=-1){if(out.size()+n>65536)throw new IllegalArgumentException("文本文件不能超过 64 KB");out.write(buffer,0,n);}return new String(out.toByteArray(),StandardCharsets.UTF_8);
+        }
+    }
+    private void loadRules() {
+        android.content.SharedPreferences prefs=getSharedPreferences("recognition-rules",MODE_PRIVATE);
+        for(RuleBook.Rule rule:ruleBook.rules){
+            int code=prefs.getInt(rule.id+".key",0);
+            rule.usage=KeyCatalog.USAGES[KeyCatalog.indexOf(code)];
+            rule.modifiers=prefs.getInt(rule.id+".mod",0)&15;
+        }
+    }
+
+    private void makeModelCard(LinearLayout parent) {
+        LinearLayout controls=card();
+        recognitionSwitch=themedSwitch();recognitionSwitch.setText("识别枪械和倍镜");recognitionSwitch.setTextSize(14);
+        recognitionSwitch.setChecked(true);controls.addView(recognitionSwitch,new LinearLayout.LayoutParams(-1,dp(50)));
+        recognitionSwitch.setOnCheckedChangeListener((v,checked)->{
+            if(ndi!=null)ndi.setRecognitionEnabled(checked);resetRecognition();
+        });
+        outputSwitch=themedSwitch();outputSwitch.setText("按识别结果发送按键");outputSwitch.setTextSize(14);
+        outputSwitch.setChecked(false);controls.addView(outputSwitch,new LinearLayout.LayoutParams(-1,dp(50)));
+        outputSwitch.setOnCheckedChangeListener((v,checked)->{
+            ruleGate.reset();outputStatus.setText(idleOutputStatus());log("MAPPED_KEY_OUTPUT "+checked);
+        });
+        outputStatus=text(idleOutputStatus(),12,MUTED,false);marginAdd(controls,outputStatus,8,0);marginAdd(parent,controls,0,12);
+        marginAdd(parent,text("稳定识别后发送一次；状态改变后再发送。自动输出每次启动默认关闭。",11,MUTED,false),0,14);
+    }
+
+    private void drawRuleRows() {
+        ruleRows.removeAllViews();String previous="";
+        for(RuleBook.Rule rule:ruleBook.rules){
+            boolean unknown=RuleBook.UNKNOWN_GUN_ID.equals(rule.id);
+            if(!rule.gun.equals(previous)){
+                marginAdd(ruleRows,text(unknown?"其他情况":RuleBook.gunName(rule.gun),13,MUTED,true),previous.isEmpty()?0:24,8);previous=rule.gun;
+            }
+            LinearLayout row=horizontal();row.setPadding(dp(14),dp(14),dp(12),dp(14));row.setMinimumHeight(dp(56));row.setBackground(ripple(CARD,14));
+            TextView title=text(unknown?"未识别到枪械":RuleBook.opticName(rule.optic),14,FG,false);
+            row.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+            TextView key=text(KeyCatalog.name(rule.usage,rule.modifiers),13,rule.usage==0?MUTED:FG,true);key.setGravity(Gravity.RIGHT);
+            row.addView(key,new LinearLayout.LayoutParams(-2,-2));
+            ImageView edit=new ImageView(this);edit.setImageDrawable(themedIcon(UiIcon.CHEVRON,MUTED,18));
+            LinearLayout.LayoutParams arrow=new LinearLayout.LayoutParams(dp(18),dp(18));arrow.leftMargin=dp(8);row.addView(edit,arrow);
+            row.setContentDescription("设置 "+rule.title()+" 的按键，当前 "+KeyCatalog.name(rule.usage,rule.modifiers));
+            row.setFocusable(true);row.setOnClickListener(v->editRule(rule));MotionFeedback.attach(row);marginAdd(ruleRows,row,0,5);
+        }
+    }
+
+    private void editRule(RuleBook.Rule rule) {
+        Context editorContext=themedContext();
+        LinearLayout form=new LinearLayout(editorContext);form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(22),dp(10),dp(22),dp(6));
+        final int[] selectedUsage={rule.usage};
+        Button keys=button("主按键 · "+KeyCatalog.name(selectedUsage[0],0),false);
+        keys.setContentDescription("选择主按键，当前 "+KeyCatalog.name(selectedUsage[0],0));
+        keys.setOnClickListener(v->SearchableKeyPicker.show(themedContext(),selectedUsage[0],BG,CARD,FG,MUTED,ACCENT,BORDER,usage->{
+            selectedUsage[0]=usage;keys.setText("主按键 · "+KeyCatalog.name(usage,0));
+            keys.setContentDescription("选择主按键，当前 "+KeyCatalog.name(usage,0));
+        }));
+        form.addView(keys,new LinearLayout.LayoutParams(-1,dp(48)));
+        marginAdd(form,text("点击主按键可搜索；修饰键可在下方组合。",12,MUTED,false),9,8);
+        CheckBox[] modifiers=new CheckBox[4];String[] titles={"Ctrl","Shift","Alt","Win"};
+        for(int i=0;i<4;i++){modifiers[i]=new CheckBox(editorContext);modifiers[i].setText(titles[i]);modifiers[i].setChecked((rule.modifiers&(1<<i))!=0);form.addView(modifiers[i]);}
+        presentDialog(new AlertDialog.Builder(editorContext).setTitle(rule.title()).setView(form).setNegativeButton("取消",null)
+            .setPositiveButton("保存",(dialog,which)->{
+                int usage=selectedUsage[0],mask=0;
+                for(int i=0;i<4;i++)if(modifiers[i].isChecked())mask|=1<<i;
+                if(usage==0)mask=0;
+                boolean saved=getSharedPreferences("recognition-rules",MODE_PRIVATE).edit().putInt(rule.id+".key",usage).putInt(rule.id+".mod",mask).commit();
+                if(!saved){Toast.makeText(this,"保存失败，原规则保留",Toast.LENGTH_SHORT).show();return;}
+                rule.usage=usage;rule.modifiers=mask;ruleGate.reset();drawRuleRows();
+                updatePreviewRecognition();outputStatus.setText(idleOutputStatus());
+                log("RULE_SAVED "+rule.id+" "+KeyCatalog.name(usage,mask));
+            }).create());
+    }
+
+    private String idleOutputStatus() {
+        int assigned=0;for(RuleBook.Rule rule:ruleBook.rules)if(rule.usage!=0)assigned++;
+        String configured=assigned==0?"输出键均未分配":"已配置 "+assigned+"/"+ruleBook.rules.length+" 项";
+        if(!recognitionSwitch.isChecked())return configured+" · 识别已关闭，不发键";
+        if(!outputSwitch.isChecked())return configured+" · 自动输出关闭";
+        return configured+(videoLive?" · 等待稳定识别与 M3 连接":" · 等待画面，不发键");
+    }
+
+    /** Displays the configured mapping only; it is not a key-delivery status. */
+    private void updatePreviewRecognition() {
+        if(previewRecognition==null)return;
+        previewRecognition.setText(lastRecognition+(recognizedRule==null?" · 按键 —":" → "+KeyCatalog.name(recognizedRule.usage,recognizedRule.modifiers)));
+        themeText(previewRecognition,recognizedRule==null?MUTED:ACCENT);
+    }
+
+    /** Clear both pending work and the visible result when its video/recognition context ends. */
+    private void resetRecognition() {
+        if(modelEngine!=null)modelEngine.reset();
+        clearRecognitionDisplay(recognitionSwitch.isChecked()?"等待画面":"识别已关闭");
+    }
+
+    private void clearRecognitionDisplay(String status) {
+        ++recognitionDisplayToken;recognitionExpiry.removeCallbacksAndMessages(null);
+        clearModelTiming();ruleGate.reset();
+        lastRecognition=status;
+        recognizedRule=null;updatePreviewRecognition();
+        modelResult.setText(lastRecognition);outputStatus.setText(idleOutputStatus());
+    }
+
+    private void expireDisplayedResult(long capturedAtMs,long nowMs) {
+        final long token=++recognitionDisplayToken;
+        recognitionExpiry.removeCallbacksAndMessages(null);
+        recognitionExpiry.postDelayed(()->{
+            if(destroyed||token!=recognitionDisplayToken)return;
+            // Display expiry cannot submit keys. Keep short-gap observation history;
+            // every actual submission still requires a new <=500ms normal result.
+            lastRecognition=recognitionSwitch.isChecked()?"等待新画面":"识别已关闭";
+            recognizedRule=null;updatePreviewRecognition();modelResult.setText(lastRecognition);
+            outputStatus.setText("等待新画面，不发键");
+        },Math.max(1,501-(nowMs-capturedAtMs)));
+    }
+
+    private void receiveFrame(int source,Bitmap frame) {
+        if(frame==null)return;
+        if(destroyed||!captureRequested||videoMode!=source){frame.recycle();return;}
+        // A real frame is sufficient to resume after WAITING, even if a backend only
+        // announces RUNNING once. Never gate recovery on the previously stale state.
+        if(!videoLive){
+            videoLive=true;
+            String detail="已收到真实 "+(source==0?"USB":"NDI")+" 视频帧："+frame.getWidth()+" × "+frame.getHeight();
+            lastVideo="RUNNING | "+detail;videoState.setText(detail);themeText(videoState,ACCENT);
+        }
+        if(recognitionSwitch.isChecked()&&modelEngine!=null)modelEngine.offer(frame);
+        videoPreview.showFrame(frame);
+    }
+
+    private void receiveNdiFrame(NdiReceiver.Frame frame) {
+        if(frame==null)return;
+        if(destroyed||!captureRequested||videoMode!=1){frame.recycle();return;}
+        if(!videoLive){
+            videoLive=true;
+            String detail="已收到真实 NDI 视频帧："+frame.sourceWidth+" × "+frame.sourceHeight;
+            lastVideo="RUNNING | "+detail;videoState.setText(detail);themeText(videoState,ACCENT);
+        }
+        try {
+            if(recognitionSwitch.isChecked()&&modelEngine!=null
+                    &&(frame.panel!=null||frame.sourceWidth!=1920||frame.sourceHeight!=1080))
+                modelEngine.offerPanel(frame.panel,frame.sourceWidth,frame.sourceHeight,frame.receivedAtMs);
+        } finally {
+            if(frame.panel!=null&&!frame.panel.isRecycled())frame.panel.recycle();
+        }
+        // The preview owns this Bitmap after delivery; never recycle an image still being drawn.
+        if(frame.preview!=null)videoPreview.showFrame(frame.preview);
+    }
+
+    private void receiveRecognition(ModelEngine.Result result) {
+        if(destroyed)return;
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(!RecognitionRuleSelector.isUsableResult(result!=null,captureRequested&&videoLive,
+                recognitionSwitch.isChecked(),result==null?-1:result.capturedAtMs,now)){
+            clearRecognitionDisplay(recognitionSwitch.isChecked()?"等待新画面":"识别已关闭");return;
+        }
+        if(modelTimingStart==0)modelTimingStart=now;
+        modelTimingCount++;modelTimingPre+=result.preprocessMs;modelTimingRun+=result.modelMs;
+        modelTimingPost+=result.postprocessMs;modelTimingAge+=Math.max(0,now-result.capturedAtMs);
+        if(now-modelTimingStart>=5000){
+            log(String.format(Locale.ROOT,"MODEL_PROFILE joint runs=%d resultFps=%.2f preprocessAvgMs=%.2f runAvgMs=%.2f postAvgMs=%.2f localFrameToResultAvgMs=%.2f (not end-to-end)",
+                modelTimingCount,(modelTimingCount-1)*1000.0/(now-modelTimingStart),
+                modelTimingPre/modelTimingCount,modelTimingRun/modelTimingCount,modelTimingPost/modelTimingCount,modelTimingAge/modelTimingCount));
+            clearModelTiming();
+        }
+        String gun=result.gun==null?"":result.gun;
+        String loadedStatus="八枪模型已加载 · 38 项按键规则";
+        if(!loadedStatus.contentEquals(modelStatus.getText()))modelStatus.setText(loadedStatus);
+        lastRecognition=gun.isEmpty()||"unknown".equals(gun)?"未识别到枪械":RuleBook.gunName(gun)+" · "+RuleBook.opticName(result.optic);
+        String gunScore=gun.isEmpty()||"unknown".equals(gun)?"--":String.format(Locale.ROOT,"%.0f%%",result.gunConfidence*100);
+        String opticScore="unknown".equals(result.optic)?"--":String.format(Locale.ROOT,"%.0f%%",result.opticConfidence*100);
+        modelResult.setText(lastRecognition+String.format(Locale.ROOT,"\n置信：枪 %s · 镜 %s · 推理 %.0f ms",gunScore,opticScore,result.elapsedMs));
+        RuleBook.Rule rule=RecognitionRuleSelector.select(ruleBook,gun,result.optic,true,
+                captureRequested&&videoLive,recognitionSwitch.isChecked(),result.capturedAtMs,now);
+        recognizedRule=rule;updatePreviewRecognition();
+        expireDisplayedResult(result.capturedAtMs,now);
+        if(!outputSwitch.isChecked()){ruleGate.reset();outputStatus.setText("发键已关闭 · "+(rule==null?"无匹配规则":KeyCatalog.name(rule.usage,rule.modifiers)));return;}
+        if(rule==null||rule.usage==0||now-result.capturedAtMs>500||!ble.isReady()){
+            ruleGate.observe(null,now);
+            outputStatus.setText(rule==null?"等待确定的枪械与倍镜":rule.usage==0?"该组合尚未分配按键":!ble.isReady()?"等待 M3 完成连接":"等待更新的识别画面");return;
+        }
+        String binding=rule.bindingId();
+        if(ruleGate.observe(binding,now)){
+            if(ble.sendMappedKey(rule.usage,rule.modifiers)){
+                ruleGate.submitted(binding);
+                outputStatus.setText("已提交："+rule.title()+" → "+KeyCatalog.name(rule.usage,rule.modifiers));
+                log("MAPPED_KEY_QUEUED "+binding+" (downstream execution unverified)");
+            }else outputStatus.setText(ble.isReady()?"等待上一组按键发送完成":"M3 连接未就绪，未提交按键");
+        }else if(!ruleGate.isSubmitted(binding))outputStatus.setText("确认中："+rule.title());
+    }
+
+    private void clearModelTiming(){
+        modelTimingStart=modelTimingCount=0;
+        modelTimingPre=modelTimingRun=modelTimingPost=modelTimingAge=0;
+    }
+
+    private void makeVideoSourcePage(LinearLayout parent) {
+        marginAdd(parent,text("选择电脑画面的输入方式",18,FG,true),0,8);
+        marginAdd(parent,text("先选择并刷新来源，再开始接收。接收期间请先停止视频再切换来源。",12,MUTED,false),0,18);
+        LinearLayout card=card();label(card,"视频输入");
+        videoKind=themedSpinner();
+        videoKind.setAdapter(themedAdapter(java.util.Arrays.asList("USB · 电脑画面（采集卡）","NDI · 局域网视频")));
+        videoKind.setSelection(videoMode);
+        marginAdd(card,videoKind,8,3);
+        ndiOptions=vertical();ndiOptions.setVisibility(View.GONE);
+        ndiHost=new EditText(themedContext());ndiHost.setSingleLine(true);ndiHost.setTextSize(12);themeText(ndiHost,FG);ndiHost.setHint("发送端 IP（可选，自动发现失败时填写）");
+        palette.bind(ndiHost,(view,p)->{view.setHintTextColor(p.color(ThemePalette.MUTED));view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(p.color(ThemePalette.MUTED)));});
+        ndiHost.setText(getPreferences(MODE_PRIVATE).getString("ndiHost",""));
+        ndiOptions.addView(ndiHost,new LinearLayout.LayoutParams(-1,dp(44)));
+        TextView ndiLink=text("NDI®  ·  ndi.video ↗",11,ACCENT,false);
+        ndiLink.setPadding(0,dp(8),0,dp(8));
+        ndiLink.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://ndi.video/"))));
+        ndiOptions.addView(ndiLink);ndiOptions.addView(text("NDI® is a registered trademark of Vizrt NDI AB.",9,MUTED,false));
+        marginAdd(card,ndiOptions,0,7);
+        videoSources=themedSpinner();marginAdd(card,videoSources,0,5);
+        refreshVideoButton=button("刷新视频源",false);refreshVideoButton.setOnClickListener(v->refreshSources());marginAdd(card,refreshVideoButton,0,12);
+        sourceRunButton=button("开始接收",true);sourceRunButton.setOnClickListener(v->{if(captureRequested)stopVideo("已停止");else startVideo();});marginAdd(card,sourceRunButton,4,0);
+        marginAdd(parent,card,0,16);
+        Button back=button("查看识别画面",false);back.setOnClickListener(v->showPage(PAGE_HOME));marginAdd(parent,back,0,0);
+    }
+
+    private void bindVideoControls() {
+        previewSwitch.setOnCheckedChangeListener((v,checked)->{
+            getPreferences(MODE_PRIVATE).edit().putBoolean("preview",checked).apply();videoPreview.setPreview(checked);
+            if(uvc!=null)uvc.setPreviewEnabled(checked);if(ndi!=null)ndi.setPreviewEnabled(checked);
+            log("PREVIEW "+checked+"; receive continues while running");
+        });
+        ecoSwitch.setOnCheckedChangeListener((v,checked)->{
+            getPreferences(MODE_PRIVATE).edit().putBoolean("eco",checked).apply();
+            if(uvc!=null)uvc.setEco(checked);if(ndi!=null)ndi.setEco(checked);log("ECO "+checked);
+        });
+        videoKind.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onNothingSelected(AdapterView<?> view) { }
+            @Override public void onItemSelected(AdapterView<?> view,View row,int position,long id) {
+                if(uvc==null||ndi==null||usb==null)return;
+                if(captureRequested)return;
+                if(videoMode!=position) { uvc.stop();ndi.stop();videoMode=position; }
+                getPreferences(MODE_PRIVATE).edit().putInt("videoMode",position).apply();
+                ndiOptions.setVisibility(position==1?View.VISIBLE:View.GONE);
+                videoState.setText("未启动");videoStats.setText("刷新视频源后开始接收");videoPreview.receiving(false);videoPreview.clear("选择视频源，开始接收");
+                updateSourceChoices();refreshSources();
+            }
+        });
+        videoPreview.setPreview(previewSwitch.isChecked());
+    }
+
+    private void updateSourceChoices() {
+        if(videoSources==null||captureRequested)return;
+        int previousIndex=videoSources.getSelectedItemPosition();
+        String previous=previousIndex>=0&&previousIndex<displayedSourceIds.size()?displayedSourceIds.get(previousIndex):"";
+        ArrayList<String> names=new ArrayList<>();
+        displayedSourceIds.clear();
+        if(videoMode==0)for(UsbProbe.DeviceInfo item:usbChoices){names.add(item.name+String.format(Locale.ROOT,"  [%04X:%04X]",item.vendorId,item.productId));displayedSourceIds.add("usb:"+item.id);}
+        else for(NdiReceiver.Source item:ndiChoices){names.add(item.name);displayedSourceIds.add("ndi:"+item.name+"|"+item.urlAddress);}
+        if(names.isEmpty())names.add(videoMode==0?"未发现采集卡，请通过 OTG 接入":"尚未发现 NDI 源，请刷新");
+        videoSources.setAdapter(themedAdapter(names));
+        int selected=displayedSourceIds.indexOf(previous);if(selected>=0)videoSources.setSelection(selected);
+    }
+    private void refreshSources() {
+        if(captureRequested)return;
+        if(videoMode==0) { if(usb!=null)usb.refresh(); }
+        else if(ndi!=null) { String host=ndiHost.getText().toString().trim();getPreferences(MODE_PRIVATE).edit().putString("ndiHost",host).apply();ndi.discover(host); }
+    }
+    private void startVideo() {
+        if(captureRequested)return;
+        int index=videoSources.getSelectedItemPosition();
+        String selection=index>=0&&index<displayedSourceIds.size()?displayedSourceIds.get(index):"";
+        UsbProbe.DeviceInfo selectedUsb=null;NdiReceiver.Source selectedNdi=null;
+        for(UsbProbe.DeviceInfo item:usbChoices)if(selection.equals("usb:"+item.id))selectedUsb=item;
+        for(NdiReceiver.Source item:ndiChoices)if(selection.equals("ndi:"+item.name+"|"+item.urlAddress))selectedNdi=item;
+        if(videoMode==0&&selectedUsb==null) { Toast.makeText(this,"请先接入并刷新采集卡",Toast.LENGTH_SHORT).show();refreshSources();return; }
+        if(videoMode==1&&selectedNdi==null) { Toast.makeText(this,"请先发现并选择 NDI 视频源",Toast.LENGTH_SHORT).show();refreshSources();return; }
+        captureRequested=true;videoLive=false;resetRecognition();updateVideoControls();videoPreview.receiving(true);videoPreview.clear("正在连接视频源…");videoState.setText("正在准备");videoStats.setText("等待首帧…");
+        if(videoMode==0) { pendingVideoUsb=true;openUsb(selectedUsb.id); }
+        else { ndi.setPreviewEnabled(previewSwitch.isChecked());ndi.setEco(ecoSwitch.isChecked());ndi.connect(selectedNdi); }
+    }
+    private void stopVideo(String reason) {
+        captureRequested=false;pendingVideoUsb=false;pendingUsb=-1;
+        videoLive=false;resetRecognition();
+        if(uvc!=null)uvc.stop();if(ndi!=null)ndi.stop();
+        if(videoState!=null) { videoState.setText(reason);videoStats.setText("视频输入已停止");videoPreview.receiving(false);videoPreview.clear("已停止接收");updateVideoControls();updateSourceChoices(); }
+        lastVideo=reason;
+    }
+    private void updateVideoControls() {
+        runVideoButton.setText(captureRequested?"停止接收":"开始接收");sourceRunButton.setText(captureRequested?"停止接收":"开始接收");videoKind.setEnabled(!captureRequested);videoSources.setEnabled(!captureRequested);refreshVideoButton.setEnabled(!captureRequested);ndiHost.setEnabled(!captureRequested);
+    }
+    private void captureState(int source,String state,String detail) {
+        if(destroyed)return;log((source==0?"UVC_STATE ":"NDI_STATE ")+state+" | "+detail);
+        if(source!=videoMode)return;
+        // Explicit stopVideo already synchronously owns STOPPED. A delayed backend
+        // STOPPED from a previous source must not cancel a newer USB permission request.
+        if("STOPPED".equals(state))return;
+        boolean receivingState="RUNNING".equals(state)||"WAITING".equals(state)||"STARTING".equals(state)||"CONNECTING".equals(state);
+        if(receivingState&&!captureRequested)return;
+        // RUNNING reports transport progress; only receiveFrame can make inference live.
+        if(!"RUNNING".equals(state)){videoLive=false;resetRecognition();}
+        if("ERROR".equals(state)||"PERMISSION_REQUIRED".equals(state)) {
+            captureRequested=false;pendingVideoUsb=false;pendingUsb=-1;
+            videoPreview.receiving(false);videoPreview.clear("ERROR".equals(state)?"未能接收视频":"已停止接收");updateVideoControls();updateSourceChoices();
+        } else if(receivingState) {
+            videoPreview.receiving(true);
+            if("WAITING".equals(state))videoPreview.clear("等待发送端画面…");
+        } else if(captureRequested)return;
+        lastVideo=state+" | "+detail;videoState.setText(detail);themeText(videoState,"RUNNING".equals(state)?ACCENT:("ERROR".equals(state)?WARN:FG));
+    }
+    private void captureStats(int source,String stats) {
+        if(destroyed||!captureRequested||source!=videoMode)return;
+        videoStats.setText(stats);
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(now-lastStatsLog>=5000) {lastStatsLog=now;log((source==0?"UVC_STATS ":"NDI_STATS ")+stats);}
+    }
+
+    private void scan() {
+        if ("CONNECTING".equals(phase)||"DISCOVERING".equals(phase)||"SUBSCRIBING".equals(phase)||"HANDSHAKING".equals(phase)||"READY".equals(phase)) return;
+        List<String> needed = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= 31) {
+            if(checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)!=PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_SCAN);
+            if(checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.BLUETOOTH_CONNECT);
+        } else if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED) needed.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        if(!needed.isEmpty()) { requestPermissions(needed.toArray(new String[0]),REQUEST_BLE); return; }
+        BluetoothAdapter adapter=BluetoothAdapter.getDefaultAdapter();
+        if(adapter==null) { log("设备没有蓝牙适配器"); return; }
+        if(!adapter.isEnabled()) { startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),REQUEST_ENABLE_BT); return; }
+        if(Build.VERSION.SDK_INT < 31) {
+            LocationManager locations=(LocationManager)getSystemService(LOCATION_SERVICE);
+            boolean enabled=locations!=null && (locations.isProviderEnabled(LocationManager.GPS_PROVIDER)||locations.isProviderEnabled(LocationManager.NETWORK_PROVIDER));
+            if(!enabled) { presentDialog(new AlertDialog.Builder(themedContext()).setTitle("需要开启定位开关").setMessage("此 Android 版本要求开启定位开关才能扫描蓝牙。映枢不读取位置数据。")
+                .setNegativeButton("取消",null).setPositiveButton("打开设置",(d,w)->startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))).create());return; }
+        }
+        discovered.clear();drawBleDevices();ble.startScan();
+    }
+
+    private void drawBleDevices() {
+        if(bleDevices==null||destroyed)return;
+        bleDevices.removeAllViews();
+        if(discovered.isEmpty()) {
+            bleDevices.addView(text("SCANNING".equals(phase)?"正在搜索，请保持 M3 通电…":"扫描后在此选择设备。",12,MUTED,false));return;
+        }
+        for(Map.Entry<String,String[]> entry:discovered.entrySet()) {
+            final String address=entry.getKey();String[] data=entry.getValue();
+            LinearLayout row=vertical();row.setPadding(dp(12),dp(10),dp(12),dp(10));row.setBackground(shape(BG,10,BORDER));
+            row.addView(text(data[0]+"  ·  "+data[1]+" dBm",14,FG,true));
+            marginAdd(row,text(address,11,MUTED,false),4,7);
+            boolean busy="CONNECTING".equals(phase)||"DISCOVERING".equals(phase)||"SUBSCRIBING".equals(phase)||"HANDSHAKING".equals(phase)||"READY".equals(phase);
+            Button connect=button(busy&&address.equals(selectedAddress)?("READY".equals(phase)?"握手成功":"连接中…"):"连接此设备",false);
+            connect.setEnabled(!busy);
+            connect.setOnClickListener(v->{ selectedAddress=address;ble.connect(address); });
+            row.addView(connect,new LinearLayout.LayoutParams(-1,dp(40)));marginAdd(bleDevices,row,6,0);
+        }
+    }
+
+    private void drawUsbDevices(List<UsbProbe.DeviceInfo> devices) {
+        if(destroyed)return;usbDevices.removeAllViews();
+        for(UsbProbe.DeviceInfo info:devices) {
+            LinearLayout row=vertical();row.setPadding(dp(12),dp(10),dp(12),dp(10));row.setBackground(shape(BG,10,BORDER));
+            row.addView(text(info.name,14,FG,true));marginAdd(row,text(info.description.split("\n",2)[0]+(info.hasPermission?" · 已授权":" · 未授权"),11,MUTED,false),5,5);
+            if(info.uvc) {
+                Button open=button("授权并检查连接",false);open.setOnClickListener(v -> {
+                    if(captureRequested)Toast.makeText(this,"请先停止视频，再单独检查 USB 设备",Toast.LENGTH_SHORT).show();
+                    else openUsb(info.id);
+                });
+                row.addView(open,new LinearLayout.LayoutParams(-1,dp(42)));
+            } else marginAdd(row,text("不是 UVC 视频设备",11,MUTED,false),4,0);
+            marginAdd(usbDevices,row,6,0);
+        }
+    }
+
+    private void openUsb(int deviceId) {
+        pendingUsb=deviceId;
+        if(Build.VERSION.SDK_INT>=28 && checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED) {
+            presentDialog(new AlertDialog.Builder(themedContext()).setTitle("外接视频设备权限")
+                .setMessage("Android 将 USB 视频采集卡也归为相机设备，因此打开它需要“相机”权限。\n\n映枢仅接收外接采集卡画面，不调用手机前置或后置摄像头。")
+                .setNegativeButton("取消",(d,w)->{pendingUsb=-1;if(pendingVideoUsb)stopVideo("权限申请已取消");})
+                .setPositiveButton("继续授权",(d,w)->requestPermissions(new String[]{Manifest.permission.CAMERA},REQUEST_CAMERA)).create());
+        } else usb.requestOpen(deviceId);
+    }
+
+    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results) {
+        super.onRequestPermissionsResult(code,permissions,results);
+        if(!appInitialized||destroyed||isFinishing())return;
+        boolean ok=results.length>0;for(int result:results)if(result!=PackageManager.PERMISSION_GRANTED)ok=false;
+        if(code==REQUEST_BLE) { if(ok)scan();else { log("蓝牙扫描权限未获允许");bleDetail.setText("扫描权限未获允许，请再次点击扫描并授权。"); } }
+        if(code==REQUEST_CAMERA) { if(ok&&pendingUsb>=0)usb.requestOpen(pendingUsb);else {log("外接 USB 视频权限未获允许或请求已取消");if(pendingVideoUsb)stopVideo("未取得视频设备权限");} }
+    }
+
+    private void exportReport() {
+        Intent create=new Intent(Intent.ACTION_CREATE_DOCUMENT);create.addCategory(Intent.CATEGORY_OPENABLE);create.setType("text/plain");
+        create.putExtra(Intent.EXTRA_TITLE,"映枢-硬件诊断.txt");startActivityForResult(create,REQUEST_EXPORT);
+    }
+    @Override public void onActivityResult(int code,int result,Intent data) {
+        super.onActivityResult(code,result,data);
+        if(!appInitialized||destroyed||isFinishing()){pendingRuleExport=null;return;}
+        if(code==REQUEST_RULE_EXPORT){
+            String content=pendingRuleExport;pendingRuleExport=null;
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null&&content!=null){
+                try(OutputStream stream=getContentResolver().openOutputStream(data.getData())){if(stream==null)throw new IllegalStateException("无法打开文件");stream.write(content.getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"按键文本已保存",Toast.LENGTH_SHORT).show();}
+                catch(Exception failure){Toast.makeText(this,"保存失败："+failure.getMessage(),Toast.LENGTH_LONG).show();}
+            }return;
+        }
+        if(code==REQUEST_RULE_IMPORT){
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null&&appInitialized&&keyQuestionAccepted()){
+                try{showRulesImport(readRulesText(data.getData()));}catch(Exception failure){Toast.makeText(this,"读取失败："+failure.getMessage(),Toast.LENGTH_LONG).show();}
+            }return;
+        }
+        if(code==REQUEST_ENABLE_BT && result==RESULT_OK)scan();
+        if(code==REQUEST_EXPORT && result==RESULT_OK && data!=null && data.getData()!=null) {
+            try(OutputStream stream=getContentResolver().openOutputStream(data.getData())) {
+                if(stream==null)throw new IllegalStateException("无法打开文件");stream.write(fullReport().getBytes(StandardCharsets.UTF_8));
+                Toast.makeText(this,"诊断记录已导出",Toast.LENGTH_SHORT).show();
+            } catch(Exception e) { log("导出失败："+e.getMessage()); }
+        }
+    }
+
+    private String summary() { return "映枢 0.3.12-trial · 八枪与倍镜\n设备："+Build.MANUFACTURER+" "+Build.MODEL+" / Android "+Build.VERSION.RELEASE+"\n视频："+lastVideo+"\n统计："+videoStats.getText()+"\n预览："+previewSwitch.isChecked()+"\n节能："+ecoSwitch.isChecked()+"\nM3："+stateName(phase)+"\n地址："+selectedAddress+"\n序列号："+serial+"\nUSB："+lastUsb+"\n模型："+modelStatus.getText()+"\n识别："+lastRecognition+"\n规则发键："+outputSwitch.isChecked()+"\n"; }
+    private String fullReport() { return summary()+"\n诊断日志\n"+String.join("\n",logs)+"\n"; }
+    private void log(String message) {
+        if(destroyed)return;
+        String line=new SimpleDateFormat("HH:mm:ss.SSS",Locale.ROOT).format(new Date())+" "+message;
+        android.util.Log.i("YingShu",message);logs.add(line);if(logs.size()>250)logs.remove(0);
+        if(logView!=null) { int from=Math.max(0,logs.size()-16);logView.setText(String.join("\n",logs.subList(from,logs.size()))); }
+        try(FileOutputStream output=new FileOutputStream(sessionLog,true)) { output.write((line+"\n").getBytes(StandardCharsets.UTF_8)); }catch(Exception ignored) { }
+    }
+    private String stateName(String p) {
+        switch(p) { case "SCANNING":return "正在扫描";case "CONNECTING":return "正在连接";case "DISCOVERING":return "正在发现服务";case "SUBSCRIBING":return "正在订阅通知";case "HANDSHAKING":return "等待设备握手";case "READY":return "握手成功";case "DISCONNECTED":return "已断开";case "ERROR":return "连接未完成";default:return "等待连接"; }
+    }
+    private String usbName(String p) {
+        switch(p) { case "NO_DEVICE":return "未发现 USB 设备";case "FOUND":return "发现 USB 设备";case "OPENED":return "USB 设备可打开";case "PERMISSION_REQUIRED":case "CAMERA_PERMISSION_REQUIRED":return "等待授权";case "PERMISSION_DENIED":return "授权未通过";case "OPENING":return "正在检查连接";case "NOT_UVC":return "不是视频设备";case "UNSUPPORTED":return "不支持 USB Host";default:return "USB 检查未完成"; }
+    }
+    private String compactUsbDetail(String status,String detail) {
+        if(!"OPENED".equals(status))return detail;
+        StringBuilder out=new StringBuilder("外接设备可打开，已读取描述符。测试句柄已释放。\n");
+        for(String line:detail.split("\n"))if(line.startsWith("声明格式：")||line.startsWith("声明尺寸："))out.append(line.length()>240?line.substring(0,240)+"…":line).append('\n');
+        return out.append("上述为设备声明能力。实时画面请在“识别”页开始接收。").toString();
+    }
+    private String hex(byte[] bytes) { StringBuilder s=new StringBuilder();for(byte b:bytes){if(s.length()>0)s.append(' ');s.append(String.format(Locale.ROOT,"%02X",b&255));}return s.toString(); }
+    private int dp(float value) { return (int)(value*getResources().getDisplayMetrics().density+0.5f); }
+    private LinearLayout vertical() { LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.VERTICAL);return v; }
+    private LinearLayout horizontal() { LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.HORIZONTAL);v.setGravity(Gravity.CENTER_VERTICAL);return v; }
+    private void themeText(TextView view,int color){palette.text(view,color);}
+    private TextView text(String value,int size,int color,boolean bold) { TextView v=new TextView(this);v.setText(value);v.setTextSize(size);themeText(v,color);v.setLineSpacing(dp(3),1);if(bold)v.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));return v; }
+    private GradientDrawable shape(int fill,int radius,int border) {
+        GradientDrawable d=new LiveGradientDrawable();d.setCornerRadius(dp(radius));
+        ThemePalette.Ref fillRef=palette.ref(fill),borderRef=palette.ref(border);int width=dp(1);
+        palette.bind(d,(shape,p)->{shape.setColor(fillRef.color(p));if(border!=0)shape.setStroke(width,borderRef.color(p));});return d;
+    }
+    private GradientDrawable roleShape(int role,int radius){GradientDrawable d=new LiveGradientDrawable();d.setCornerRadius(dp(radius));palette.bind(d,(shape,p)->shape.setColor(p.color(role)));return d;}
+    private GradientDrawable fixedShape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setCornerRadius(dp(radius));d.setColor(color);return d;}
+    private LinearLayout card() { LinearLayout v=vertical();v.setPadding(dp(16),dp(16),dp(16),dp(16));v.setBackground(shape(CARD,20,0));return v; }
+    private void label(LinearLayout parent,String title) { parent.addView(text(title,12,MUTED,true)); }
+    private android.graphics.drawable.RippleDrawable ripple(int fill,int radius) {
+        return themedRipple(shape(fill,radius,0),radius,false);
+    }
+    private android.graphics.drawable.RippleDrawable themedRipple(android.graphics.drawable.Drawable content,int radius,boolean primary){
+        android.graphics.drawable.RippleDrawable d=new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x16000000),content,fixedShape(Color.WHITE,radius));
+        palette.bind(d,(r,p)->r.setColor(android.content.res.ColorStateList.valueOf(primary?0x28ffffff:p.color(ThemePalette.RIPPLE))));return d;
+    }
+    private UiIcon themedIcon(int kind,int color,int size){UiIcon icon=new UiIcon(kind,color,dp(size));ThemePalette.Ref ref=palette.ref(color);palette.bind(icon,(i,p)->i.setColor(ref.color(p)));return icon;}
+    private ElasticSwitch themedSwitch(){ElasticSwitch view=new ElasticSwitch(this);themeText(view,FG);palette.bind(view,(s,p)->s.setOffColor(p.color(ThemePalette.SWITCH_OFF)));return view;}
+    private Spinner themedSpinner(){
+        Spinner view=new Spinner(themedContext());view.setPopupBackgroundDrawable(roleShape(ThemePalette.BG,12));
+        palette.bind(view,(s,p)->s.setBackgroundTintList(android.content.res.ColorStateList.valueOf(p.color(ThemePalette.MUTED))));return view;
+    }
+    private ArrayAdapter<String> themedAdapter(List<String> values){
+        return new ArrayAdapter<String>(themedContext(),android.R.layout.simple_spinner_dropdown_item,values){
+            private View colorRow(View view,boolean dropdown){
+                if(view instanceof TextView){TextView label=(TextView)view;themeText(label,FG);if(dropdown)label.setBackground(roleShape(ThemePalette.BG,0));}
+                return view;
+            }
+            @Override public View getView(int position,View convertView,ViewGroup parent){return colorRow(super.getView(position,convertView,parent),false);}
+            @Override public View getDropDownView(int position,View convertView,ViewGroup parent){return colorRow(super.getDropDownView(position,convertView,parent),true);}
+        };
+    }
+    private ImageButton iconButton(int icon,String description) {
+        ImageButton button=new ImageButton(this);button.setImageDrawable(themedIcon(icon,FG,24));button.setPadding(dp(10),dp(10),dp(10),dp(10));
+        button.setContentDescription(description);button.setBackground(ripple(Color.TRANSPARENT,24));MotionFeedback.attach(button);return button;
+    }
+    private Button button(String title,boolean primary) {
+        Button b=new Button(this);b.setText(title);b.setTextSize(13);b.setAllCaps(false);b.setPadding(dp(14),0,dp(14),0);b.setMinHeight(0);b.setMinimumHeight(0);
+        styleActionButton(b,primary);return b;
+    }
+    private void styleActionButton(Button b,boolean primary){
+        b.setBackgroundTintList(null);
+        b.setAllCaps(false);b.setStateListAnimator(null);b.setElevation(dp(primary?1.5f:1f));
+        final int[][] enabledStates={new int[]{-android.R.attr.state_enabled},new int[]{}};
+        palette.bind(b,(button,p)->button.setTextColor(new android.content.res.ColorStateList(enabledStates,new int[]{p.color(ThemePalette.MUTED),primary?Color.WHITE:p.color(ThemePalette.FG)})));
+        android.graphics.drawable.StateListDrawable states=new android.graphics.drawable.StateListDrawable();
+        GradientDrawable disabled=roleShape(ThemePalette.BUTTON_DISABLED,24);int strokeWidth=dp(1);
+        palette.bind(disabled,(shape,p)->shape.setStroke(strokeWidth,p.color(ThemePalette.BORDER)));
+        states.addState(new int[]{-android.R.attr.state_enabled},disabled);
+        GradientDrawable surface=new LiveGradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xff4185fa,0xff3479f2});
+        surface.setCornerRadius(dp(24));surface.setStroke(dp(.6f),primary?0xff3276ed:BORDER);
+        if(!primary)palette.bind(surface,(shape,p)->{shape.setColors(new int[]{p.color(ThemePalette.BUTTON_TOP),p.color(ThemePalette.BUTTON_BOTTOM)});shape.setStroke(strokeWidth,p.color(ThemePalette.BORDER));});
+        states.addState(new int[]{},themedRipple(surface,24,primary));
+        b.setBackground(states);MotionFeedback.attach(b);
+    }
+    private void presentDialog(AlertDialog dialog){
+        dialog.show();
+        for(int which:new int[]{AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEUTRAL}){
+            Button b=dialog.getButton(which);if(b==null||b.getVisibility()!=View.VISIBLE)continue;
+            styleActionButton(b,which==AlertDialog.BUTTON_POSITIVE);b.setTextSize(13);b.setPadding(dp(18),0,dp(18),0);
+            android.view.ViewGroup.LayoutParams raw=b.getLayoutParams();raw.height=dp(44);
+            if(raw instanceof android.view.ViewGroup.MarginLayoutParams){android.view.ViewGroup.MarginLayoutParams margins=(android.view.ViewGroup.MarginLayoutParams)raw;margins.setMarginStart(dp(5));margins.setMarginEnd(dp(5));}
+            b.setLayoutParams(raw);
+        }
+    }
+
+    private void marginAdd(LinearLayout parent,View child,int top,int bottom) { LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,child instanceof Button?dp(44):-2);p.topMargin=dp(top);p.bottomMargin=dp(bottom);parent.addView(child,p); }
+    @Override public void onSaveInstanceState(Bundle state) {
+        state.putInt("selected-page",currentPage);if(pendingRuleExport!=null)state.putString("pending-rule-export",pendingRuleExport);super.onSaveInstanceState(state);
+    }
+    @Override public void onBackPressed() {
+        if(!appInitialized){finishAndRemoveTask();return;}
+        if(drawerOpen){setDrawerOpen(false);return;}
+        if(currentPage!=PAGE_HOME){showPage(PAGE_HOME);return;}
+        super.onBackPressed();
+    }
+    @Override public void onStop() {
+        if(!appInitialized){super.onStop();return;}
+        if(outputSwitch!=null)outputSwitch.setChecked(false);
+        stopVideo("离开前台，已停止");
+        if(ble!=null) { ble.stopScan(); if(!"IDLE".equals(phase)&&!"DISCONNECTED".equals(phase)&&!"ERROR".equals(phase)) { log("应用离开前台，释放 M3 连接");ble.disconnect(); } }
+        super.onStop();
+    }
+    @Override public void onDestroy() {
+        destroyed=true;if(agreementDialog!=null){agreementDialog.dismiss();agreementDialog=null;}if(keysQuestionDialog!=null){keysQuestionDialog.dismiss();keysQuestionDialog=null;}
+        palette.clear();
+        if(appRoot!=null)appRoot.animate().cancel();
+        if(drawerPanel!=null)drawerPanel.animate().cancel();if(drawerScrim!=null)drawerScrim.animate().cancel();
+        for(ValueAnimator animation:navigationAnimations)if(animation!=null)animation.cancel();
+        for(ScrollView page:pages)if(page!=null)page.animate().cancel(); ++recognitionDisplayToken;recognitionExpiry.removeCallbacksAndMessages(null);if(modelEngine!=null)modelEngine.close();if(uvc!=null)uvc.close();if(ndi!=null)ndi.close();if(ble!=null)ble.close();if(usb!=null)usb.close();destroyed=true;super.onDestroy(); }
+}
