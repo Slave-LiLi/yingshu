@@ -1,0 +1,26 @@
+{
+  "release": "0.3.13-trial",
+  "date": "2026-11-12",
+  "model_contract": {
+    "schema_version": 6,
+    "model_sha256": "0ed610790a14323061d8ba102c9c70aac32a03ecd28d872d187fd14587440528",
+    "mask_sha256": "0f035302b617d2cb0c62b728a4158d2eae9f1df6f5215dd51f7447238e9cfaac",
+    "verified": true
+  },
+  "checkpoint_sha256": "e36fecaf2155758aa1ba922da1c0166c0f65d7aa42de7ef2de033003a848fb22",
+  "model_sha256": "0ed610790a14323061d8ba102c9c70aac32a03ecd28d872d187fd14587440528",
+  "exported_model_sha256": "f3ff426295372e33d07cd63155a700c520133236940a1488aeaefc7ea15688f8",
+  "exported_graph_equal": true,
+  "synthetic_inputs": 3,
+  "synthetic_output_max_absolute_errors": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "apk_sha256": "8a2bb5818fbfb4e01683c27b249662febdd42356db41b0acd04815cca6f521fc",
+  "all_apk_assets_equal_source": true,
+  "apk_assets_checked": 10,
+  "screenshot_zip_sha256": "9071e54cd586fdb44bfc514b54f22c10720500aaf1d6e7d592c81e38b439e3a8",
+  "original_screenshots": 69,
+  "scope": "Publication integrity and deterministic synthetic export equivalence only. No retraining, new phone test or independent accuracy measurement in this publication step."
+}

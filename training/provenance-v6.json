@@ -1,0 +1,66 @@
+{
+  "release": "0.3.13-trial",
+  "selection": {
+    "candidate": "candidate-mix50",
+    "model_sha256": "0ed610790a14323061d8ba102c9c70aac32a03ecd28d872d187fd14587440528",
+    "checkpoint_sha256": "e36fecaf2155758aa1ba922da1c0166c0f65d7aa42de7ef2de033003a848fb22",
+    "thresholds": {
+      "gun": 0.25,
+      "optic": 0.8,
+      "conflict": 0.8,
+      "margin": 0.1
+    },
+    "selection_checks": {
+      "old_validation_wrong_not_increased": true,
+      "regression_v4_wrong_not_increased": true,
+      "regression_v5_wrong_not_increased": true,
+      "old_development_234_wrong_not_increased": true,
+      "new_validation_improves_or_equal": true,
+      "new_validation_at_least_90pct": true,
+      "old_234_loss_at_most_3": true,
+      "v5_regression_loss_at_most_2": true,
+      "new_fit_no_accepted_wrong": true
+    },
+    "split_plan_sha256": "e13ffc3667fcbcc9128799931b5a0a00765daa4bed610f60dbd54aa01e1709fb",
+    "selection_before_new_holdout": true
+  },
+  "source_video_sha256": "8e3dc9bf54241d7187a6a98d4eaceb3049db07037a6bfd31d80a0ac39d6f5738",
+  "new_frames": {
+    "training": 104,
+    "validation": 27,
+    "holdout": 63,
+    "holdout_positive": 60,
+    "holdout_no_hud": 3
+  },
+  "combined_unique_training": 313,
+  "weighted_training_entries": 1181,
+  "combined_validation": 63,
+  "new_combinations": [
+    "R99 one_x",
+    "ALTERNATOR one_x",
+    "R301 two_x",
+    "R301 three_x",
+    "R301 four_x"
+  ],
+  "starting_checkpoint_sha256": "f0fecfc75104ee62f55421d22c31f6000a6209afe9baf875aedd44407bd9090d",
+  "parameters_file": "hyperparameters-v6.json",
+  "weight_interpolation": {
+    "v5_fraction": 0.5,
+    "fine_tuned_fraction": 0.5,
+    "floating_tensor_formula": "v5.float() * 0.5 + fine_tuned.float() * 0.5",
+    "non_floating_tensors": "retain v5 values",
+    "architecture": "one shared backbone; not runtime ensembling"
+  },
+  "new_holdout_result": {
+    "positive_correct": 60,
+    "positive_total": 60,
+    "no_hud_correct_rejection": 3,
+    "no_hud_total": 3
+  },
+  "limits": [
+    "Same-recording temporal holdout, not independent gameplay.",
+    "Kraber excluded from all training, including negatives; unknown rejection is not guaranteed.",
+    "Private source videos and labeled datasets are not included. Exact historical retraining is not reproducible from this repository alone.",
+    "Current v6 checkpoint supports editing, continued training and export. v5 checkpoint and historical publication-check.json are retained."
+  ]
+}

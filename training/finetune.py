@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Continue training the editable v5 checkpoint using your own labeled data.
+"""Continue training the editable v6 checkpoint using your own labeled data.
 
-Defaults reproduce the original v5 training options, not its unavailable input data
+Defaults reproduce the v6 fine-tuning options, not its unavailable input data
 or earlier checkpoint. No exact retraining or recognition-quality claim is made.
 """
 from pathlib import Path
@@ -15,7 +15,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path, help='New output directory; existing paths are rejected')
     parser.add_argument('--checkpoint', type=Path, default=CHECKPOINT, help='Trusted editable 13-class checkpoint')
     parser.add_argument('--device', default='0', help='Ultralytics device selector, e.g. 0 or cpu')
-    parser.add_argument('--epochs', type=int, default=80)
+    parser.add_argument('--epochs', type=int, default=60)
     parser.add_argument('--batch', type=int, default=8)
     args = parser.parse_args()
     checkpoint = check_checkpoint(args.checkpoint)
@@ -34,7 +34,7 @@ def main():
     names = [names[i] for i in range(len(names))] if isinstance(names, dict) else names
     if names != CLASSES:
         raise ValueError('Dataset names must exactly match training/data.example.yaml')
-    parameters = __import__('json').loads((ROOT / 'training/hyperparameters-v5.json').read_text())
+    parameters = __import__('json').loads((ROOT / 'training/hyperparameters-v6.json').read_text())
     parameters.update(epochs=args.epochs, batch=args.batch, device=args.device)
     torch.set_num_threads(4)
     model = YOLO(str(checkpoint))

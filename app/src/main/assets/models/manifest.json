@@ -54,7 +54,11 @@
     "Old R99 none and user-confirmed one_x samples remain unchanged.",
     "Old Kraber exclusion is retained: no Kraber training or negative samples. Threshold rejection cannot guarantee rejection of every unseen gun.",
     "Old234 transformed samples and old v4 holdout19 are development regression, not independent accuracy.",
-    "New v5 offline correctness requires correct gun/optic plus accepted optic center errors strictly below14px in both axes; this is an evaluation rule, not a new runtime threshold."
+    "New v5 offline correctness requires correct gun/optic plus accepted optic center errors strictly below14px in both axes; this is an evaluation rule, not a new runtime threshold.",
+    "v6 adds a 1920x1080 30fps 111-second edited recording: R99 one_x, ALTERNATOR one_x, R301 two_x/three_x/four_x. No OCR is used. User corrected the initial R99 identity.",
+    "v6 has104 new training,27 new validation and63 held-out frames (60 weapon-positive,3 no-HUD negative). All selected frames visually reviewed before training; prior v5 holdout now development regression.",
+    "New v6 holdout comes from separated temporal episodes/blocks of the same edited recording, not independent-match accuracy. Very small R99 and ALTERNATOR holdout subgroups.",
+    "Runtime ROI, binary mask, class order, 320x320 input, shared backbone, output shape and confidence thresholds remain unchanged."
   ],
   "joint_detector": {
     "file": "joint.onnx",
@@ -101,7 +105,7 @@
     "optic_score_threshold": 0.8,
     "optic_conflict_threshold": 0.8,
     "optic_conflict_margin": 0.1,
-    "sha256": "850d46265ff4f2cdeb0e27c545752571423292ee1522798c4f282b1af75f5af5",
+    "sha256": "0ed610790a14323061d8ba102c9c70aac32a03ecd28d872d187fd14587440528",
     "bytes": 9701857,
     "input_shape": [
       1,
@@ -117,6 +121,12 @@
     "four_x_policy": "Includes 2-4x adjustable optic regardless of current zoom",
     "r99_policy": "Only none and one_x; reject unsupported winning class, no fallback"
   },
-  "training_source_video_sha256": "a3a32b8f91639aae3e914d3a6c46324e8d53b24fa9bb3743775e329d5de8e336",
-  "previous_v4_training_source_video_sha256": "39bd993e60d6b014a23431c1cd82bce8ec272bfdeb451ded9b4c53811c2c2a3d"
+  "training_source_video_sha256": "8e3dc9bf54241d7187a6a98d4eaceb3049db07037a6bfd31d80a0ac39d6f5738",
+  "previous_v4_training_source_video_sha256": "39bd993e60d6b014a23431c1cd82bce8ec272bfdeb451ded9b4c53811c2c2a3d",
+  "previous_v5_training_source_video_sha256": "a3a32b8f91639aae3e914d3a6c46324e8d53b24fa9bb3743775e329d5de8e336",
+  "v6_weight_interpolation": {
+    "v6_fraction": 0.5,
+    "v5_fraction": 0.5,
+    "single_model": true
+  }
 }

@@ -238,7 +238,7 @@ public final class MainActivity extends Activity {
             @Override public void onResult(ModelEngine.Result result) { receiveRecognition(result); }
             @Override public void onError(String detail) { if(!destroyed){modelStatus.setText(detail);clearRecognitionDisplay("识别暂不可用");log("MODEL "+detail);} }
         });
-        log("APP_START io.yingshu.framekey 0.3.12-trial / " + Build.MANUFACTURER + " " + Build.MODEL + " / Android " + Build.VERSION.RELEASE + " API " + Build.VERSION.SDK_INT);
+        log("APP_START io.yingshu.framekey 0.3.13-trial / " + Build.MANUFACTURER + " " + Build.MODEL + " / Android " + Build.VERSION.RELEASE + " API " + Build.VERSION.SDK_INT);
         log("SCOPE USB/NDI + eight-gun trial; keys unassigned by default; output toggle starts off");
         usb.refresh();
         videoMode=getPreferences(MODE_PRIVATE).getInt("videoMode",0);
@@ -343,7 +343,7 @@ public final class MainActivity extends Activity {
             row.addView(title,labelParams);row.setFocusable(true);row.setOnClickListener(v->showPage(destination));MotionFeedback.attach(row);
             LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.bottomMargin=dp(4);items.addView(row,rp);
         }
-        TextView version=text("0.3.12 · 八枪试训",11,MUTED,false);version.setPadding(dp(14),dp(16),dp(14),0);drawerPanel.addView(version);
+        TextView version=text("0.3.13 · 八枪试训",11,MUTED,false);version.setPadding(dp(14),dp(16),dp(14),0);drawerPanel.addView(version);
         setDrawerOpen(false);
     }
 
@@ -1051,7 +1051,7 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private String summary() { return "映枢 0.3.12-trial · 八枪与倍镜\n设备："+Build.MANUFACTURER+" "+Build.MODEL+" / Android "+Build.VERSION.RELEASE+"\n视频："+lastVideo+"\n统计："+videoStats.getText()+"\n预览："+previewSwitch.isChecked()+"\n节能："+ecoSwitch.isChecked()+"\nM3："+stateName(phase)+"\n地址："+selectedAddress+"\n序列号："+serial+"\nUSB："+lastUsb+"\n模型："+modelStatus.getText()+"\n识别："+lastRecognition+"\n规则发键："+outputSwitch.isChecked()+"\n"; }
+    private String summary() { return "映枢 0.3.13-trial · 八枪与倍镜\n设备："+Build.MANUFACTURER+" "+Build.MODEL+" / Android "+Build.VERSION.RELEASE+"\n视频："+lastVideo+"\n统计："+videoStats.getText()+"\n预览："+previewSwitch.isChecked()+"\n节能："+ecoSwitch.isChecked()+"\nM3："+stateName(phase)+"\n地址："+selectedAddress+"\n序列号："+serial+"\nUSB："+lastUsb+"\n模型："+modelStatus.getText()+"\n识别："+lastRecognition+"\n规则发键："+outputSwitch.isChecked()+"\n"; }
     private String fullReport() { return summary()+"\n诊断日志\n"+String.join("\n",logs)+"\n"; }
     private void log(String message) {
         if(destroyed)return;
