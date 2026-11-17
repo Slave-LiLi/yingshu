@@ -2,9 +2,11 @@
 
 Android 视频接收、游戏 HUD 枪械与倍镜识别，以及可自定义的 M3 按键映射工具。
 
-当前应用版本：**0.3.13-trial**（versionCode 17）。支持 Android 8.0 及以上、arm64-v8a。界面使用原生 Android Java；模型在手机本地通过 ONNX Runtime 推理。
+当前源码版本为 **0.3.14-trial**（versionCode 18）。支持 Android 8.0 及以上、arm64-v8a。界面使用原生 Android Java；模型在手机本地通过 ONNX Runtime 推理。
 
-[下载发行包](https://github.com/Slave-LiLi/yingshu/releases/tag/v0.3.13-trial) · [构建说明](docs/BUILD.md) · [模型与训练](docs/MODEL.md)
+[下载上一版 0.3.13](https://github.com/Slave-LiLi/yingshu/releases/tag/v0.3.13-trial) · [构建说明](docs/BUILD.md) · [模型与训练](docs/MODEL.md)
+
+0.3.14 的识别工作台采用空间面板、轨道晶体和编队节点。窄屏上下排列预览和控件，宽屏可并排操作。
 
 ## 功能
 
@@ -31,7 +33,7 @@ Android 视频接收、游戏 HUD 枪械与倍镜识别，以及可自定义的 
 
 ## 0.3.13 实测与已知问题
 
-本版更新为 v6 联合模型，保留 0.3.12 的 UI、按键规则和推理流程。荣耀 10 上约 **3.16 次识别/秒**。公开保留 [69 张手机截图的实测说明](docs/evidence/0.3.13/phone-video-test.md) 和 [截图总览](docs/evidence/0.3.13/screenshots.md)；完整截图包在本版 Release。
+0.3.13 更新为 v6 联合模型。以下数据来自该版的手机测试。荣耀 10 上约 **3.16 次识别/秒**。公开保留 [69 张手机截图的实测说明](docs/evidence/0.3.13/phone-video-test.md) 和 [截图总览](docs/evidence/0.3.13/screenshots.md)；完整截图包在本版 Release。
 
 指定旧录像的 62 个已支持枪械组合测试点中，39 次首次界面读数完整正确、22 次等待新画面、1 次未识别，即时正确显示覆盖率为 **62.9%**。另 7 个克雷贝尔测试点中出现 2 次误认复仇女神。结果显示过期空档与未知枪械误识别**尚未修复**，因此本版仍标记为试用版。以上包含 UI 状态，不是纯模型准确率；同源录像也不代表独立新对局泛化。[完整验证范围](docs/VALIDATION.md) 分别说明不同素材和测试方法。
 

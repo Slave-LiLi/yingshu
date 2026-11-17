@@ -1,8 +1,8 @@
 # 从源码构建
 
-本工程使用 Windows PowerShell、JDK 25、Python 3.13 和 Android SDK/NDK 的独立构建脚本，没有 Gradle wrapper。发布的 APK 是 `0.3.13-trial`、`versionCode 17`、`arm64-v8a`，最低 Android 8.0/API 26。
+本工程使用 Windows PowerShell、JDK 25、Python 3.13 和 Android SDK/NDK 的独立构建脚本，没有 Gradle wrapper。默认构建 `0.3.14-trial`、`versionCode 18`、`arm64-v8a`，最低 Android 8.0/API 26。
 
-0.3.13 更新为已完成本轮手机实测的 v6 模型及版本号，保留原遮罩和推理/硬件逻辑；已知显示空档和未知枪械误识别见 VALIDATION.md。公开构建脚本改为使用本机工具路径与开发者自己的签名证书；这不意味着自行构建的 APK 与发布包逐字节相同。
+0.3.14 重构了应用界面，使用 0.3.13 的 v6 模型。0.3.13 的手机实测结果见 VALIDATION.md。公开构建脚本改为使用本机工具路径与开发者自己的签名证书；这不意味着自行构建的 APK 与发布包逐字节相同。
 
 ## 工具与依赖
 
@@ -67,7 +67,7 @@ try {
 | `-StorePasswordEnvironment` | `YINGSHU_KEYSTORE_PASSWORD` |
 | `-KeyPasswordEnvironment` | `YINGSHU_KEY_PASSWORD` |
 
-产物位于 `build/yingshu-hardware-0.3.13-trial.apk` 和 `build/build-info.json`。脚本会核对模型契约、编译 Java/JNI、打包、签名并验证签名和 ZIP 对齐，不会自动安装或卸载手机应用。
+产物位于 `build/yingshu-hardware-0.3.14-trial.apk` 和 `build/build-info.json`。脚本会核对模型契约、编译 Java/JNI、打包、签名并验证签名和 ZIP 对齐，不会自动安装或卸载手机应用。
 
 自行签名的 APK 不能作为更新覆盖另一个证书签名的安装包。若需要更换安装，先在应用中导出按键配置；卸载会删除应用数据。保留自己的签名证书才能继续为自己的安装版本提供更新。
 

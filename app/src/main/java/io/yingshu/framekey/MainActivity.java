@@ -80,6 +80,7 @@ public final class MainActivity extends Activity {
     private LinearLayout appBody, drawerPanel;
     private View drawerScrim;
     private TextView pageTitle;
+    private TextView sourceTag;
     private ImageButton menuButton;
     private boolean drawerOpen;
     private int currentPage;
@@ -94,6 +95,7 @@ public final class MainActivity extends Activity {
     private LinearLayout ndiOptions;
     private TextView videoState, videoStats;
     private Button runVideoButton, refreshVideoButton;
+    private Button changeVideoSource;
     private ElasticSwitch previewSwitch, ecoSwitch;
     private final ArrayList<UsbProbe.DeviceInfo> usbChoices = new ArrayList<>();
     private final ArrayList<NdiReceiver.Source> ndiChoices = new ArrayList<>();
@@ -238,7 +240,7 @@ public final class MainActivity extends Activity {
             @Override public void onResult(ModelEngine.Result result) { receiveRecognition(result); }
             @Override public void onError(String detail) { if(!destroyed){modelStatus.setText(detail);clearRecognitionDisplay("识别暂不可用");log("MODEL "+detail);} }
         });
-        log("APP_START io.yingshu.framekey 0.3.13-trial / " + Build.MANUFACTURER + " " + Build.MODEL + " / Android " + Build.VERSION.RELEASE + " API " + Build.VERSION.SDK_INT);
+        log("APP_START io.yingshu.framekey 0.3.14-trial / " + Build.MANUFACTURER + " " + Build.MODEL + " / Android " + Build.VERSION.RELEASE + " API " + Build.VERSION.SDK_INT);
         log("SCOPE USB/NDI + eight-gun trial; keys unassigned by default; output toggle starts off");
         usb.refresh();
         videoMode=getPreferences(MODE_PRIVATE).getInt("videoMode",0);
@@ -261,7 +263,7 @@ public final class MainActivity extends Activity {
     private void setThemeProgress(float progress){
         palette.setProgress(progress);
         BG=palette.color(ThemePalette.BG);CARD=palette.color(ThemePalette.CARD);FG=palette.color(ThemePalette.FG);
-        MUTED=palette.color(ThemePalette.MUTED);ACCENT=palette.color(ThemePalette.ACCENT);BORDER=palette.color(ThemePalette.BORDER);
+        MUTED=palette.color(ThemePalette.MUTED);ACCENT=palette.color(ThemePalette.ACCENT_TEXT);BORDER=palette.color(ThemePalette.BORDER);
         WARN=palette.color(ThemePalette.WARN);DRAWER=palette.color(ThemePalette.DRAWER);SELECTED=palette.color(ThemePalette.SELECTED);
         palette.paint();
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
@@ -295,14 +297,20 @@ public final class MainActivity extends Activity {
                     insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;
         });
         appBody=vertical();appRoot.addView(appBody,new FrameLayout.LayoutParams(-1,-1));
-        LinearLayout top=horizontal();top.setPadding(dp(12),dp(5),dp(16),dp(5));
+        LinearLayout top=horizontal();top.setPadding(dp(12),dp(6),dp(16),dp(6));
+        top.setBackground(roleShape(ThemePalette.CARD,0));
         menuButton=iconButton(UiIcon.MENU,"打开导航菜单");menuButton.setOnClickListener(v->setDrawerOpen(true));
-        top.addView(menuButton,new LinearLayout.LayoutParams(dp(44),dp(44)));
-        pageTitle=text(PAGE_TITLES[currentPage],18,FG,true);
-        LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1);titleParams.leftMargin=dp(9);
+        top.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        pageTitle=text(PAGE_TITLES[currentPage],20,FG,true);
+        LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1);titleParams.setMarginStart(dp(12));
         top.addView(pageTitle,titleParams);
-        TextView brand=text("映枢",12,MUTED,false);top.addView(brand);
-        appBody.addView(top,new LinearLayout.LayoutParams(-1,dp(58)));
+        SpatialArt mark=new SpatialArt(this,palette,SpatialArt.Mode.MARK);
+        LinearLayout.LayoutParams brandMarkParams=new LinearLayout.LayoutParams(dp(38),dp(38));
+        brandMarkParams.setMarginEnd(dp(6));top.addView(mark,brandMarkParams);
+        TextView brand=text("映枢",15,FG,true);top.addView(brand);
+        appBody.addView(top,new LinearLayout.LayoutParams(-1,-2));
+        View seam=new View(this);seam.setBackground(roleShape(ThemePalette.BORDER,0));
+        appBody.addView(seam,new LinearLayout.LayoutParams(-1,dp(1)));
         pageHost=new FrameLayout(this);appBody.addView(pageHost,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout home=createPage(PAGE_HOME),keys=createPage(PAGE_KEYS),devices=createPage(PAGE_DEVICES),
                 sources=createPage(PAGE_SOURCES),settings=createPage(PAGE_SETTINGS);
@@ -313,7 +321,15 @@ public final class MainActivity extends Activity {
     private LinearLayout createPage(int index) {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);
         scroll.setVerticalScrollBarEnabled(false);pages[index]=scroll;
-        LinearLayout content=vertical();content.setPadding(dp(20),dp(14),dp(20),dp(28));
+        LinearLayout content=vertical();
+        scroll.addOnLayoutChangeListener((view,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
+            int width=right-left;
+            int gutter=width>=dp(600)?dp(24):dp(16);
+            int maxWidth=dp(index==PAGE_HOME?1080:720);
+            int inset=Math.max(gutter,(width-maxWidth)/2);
+            if(content.getPaddingLeft()!=inset)content.setPadding(inset,dp(16),inset,dp(32));
+        });
+        content.setPadding(dp(16),dp(16),dp(16),dp(32));
         scroll.addView(content,new ScrollView.LayoutParams(-1,-2));
         pageHost.addView(scroll,new FrameLayout.LayoutParams(-1,-1));return content;
     }
@@ -323,28 +339,48 @@ public final class MainActivity extends Activity {
         drawerScrim.setContentDescription("关闭导航菜单");drawerScrim.setOnClickListener(v->setDrawerOpen(false));
         appRoot.addView(drawerScrim,new FrameLayout.LayoutParams(-1,-1));
         drawerPanel=vertical();drawerPanel.setBackground(shape(DRAWER,0,0));drawerPanel.setElevation(dp(12));
-        drawerPanel.setPadding(dp(12),dp(7),dp(12),dp(20));drawerPanel.setClickable(true);
-        int width=Math.min(dp(304),Math.max(dp(200),getResources().getDisplayMetrics().widthPixels-dp(56)));
+        drawerPanel.setPadding(dp(16),dp(8),dp(16),dp(16));drawerPanel.setClickable(true);
+        int width=drawerWidth(getResources().getDisplayMetrics().widthPixels);
         FrameLayout.LayoutParams drawerParams=new FrameLayout.LayoutParams(width,-1,Gravity.LEFT);
         appRoot.addView(drawerPanel,drawerParams);
-        LinearLayout heading=horizontal();heading.setPadding(dp(12),0,0,dp(12));
-        heading.addView(text("映枢",20,FG,true),new LinearLayout.LayoutParams(0,-2,1));
+        appRoot.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
+            int resized=drawerWidth(r-l-v.getPaddingLeft()-v.getPaddingRight());
+            if(drawerParams.width!=resized){drawerParams.width=resized;drawerPanel.setLayoutParams(drawerParams);}
+        });
+        LinearLayout heading=horizontal();heading.setPadding(dp(4),0,0,dp(8));
+        LinearLayout.LayoutParams drawerMarkParams=new LinearLayout.LayoutParams(dp(42),dp(42));
+        drawerMarkParams.setMarginEnd(dp(8));
+        heading.addView(new SpatialArt(this,palette,SpatialArt.Mode.MARK),drawerMarkParams);
+        heading.addView(text("映枢",22,FG,true),new LinearLayout.LayoutParams(0,-2,1));
         ImageButton close=iconButton(UiIcon.CLOSE,"关闭导航菜单");close.setOnClickListener(v->setDrawerOpen(false));
-        heading.addView(close,new LinearLayout.LayoutParams(dp(44),dp(44)));drawerPanel.addView(heading);
+        heading.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));drawerPanel.addView(heading);
         ScrollView navigation=new ScrollView(this);navigation.setFillViewport(false);navigation.setVerticalScrollBarEnabled(false);
         LinearLayout items=vertical();navigation.addView(items);drawerPanel.addView(navigation,new LinearLayout.LayoutParams(-1,0,1));
+        SpatialArt banner=new SpatialArt(this,palette,SpatialArt.Mode.BANNER);
+        banner.setBackground(roleShape(ThemePalette.PREVIEW,16));banner.setClipToOutline(true);
+        LinearLayout.LayoutParams bannerParams=new LinearLayout.LayoutParams(-1,dp(72));
+        bannerParams.bottomMargin=dp(16);items.addView(banner,bannerParams);
         int[] icons={UiIcon.RECOGNIZE,UiIcon.KEYBOARD,UiIcon.DEVICE,UiIcon.VIDEO,UiIcon.SETTINGS};
         for(int i=0;i<PAGE_TITLES.length;i++){
             final int destination=i;LinearLayout row=horizontal();navigationRows[i]=row;
-            row.setPadding(dp(14),dp(14),dp(12),dp(14));row.setMinimumHeight(dp(54));
-            ImageView icon=new ImageView(this);icon.setImageDrawable(themedIcon(icons[i],FG,22));
+            row.setPadding(dp(14),dp(13),dp(12),dp(13));row.setMinimumHeight(dp(52));
+            ImageView icon=new ImageView(this);icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            icon.setImageDrawable(themedIcon(icons[i],ACCENT,22));
             row.addView(icon,new LinearLayout.LayoutParams(dp(22),dp(22)));
             TextView title=text(PAGE_TITLES[i],15,FG,false);LinearLayout.LayoutParams labelParams=new LinearLayout.LayoutParams(0,-2,1);labelParams.leftMargin=dp(14);
-            row.addView(title,labelParams);row.setFocusable(true);row.setOnClickListener(v->showPage(destination));MotionFeedback.attach(row);
+            row.addView(title,labelParams);
+            View indicator=new View(this);indicator.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            indicator.setBackground(roleShape(ThemePalette.ACCENT_TEXT,2));row.addView(indicator,new LinearLayout.LayoutParams(dp(4),dp(18)));
+            row.setFocusable(true);row.setOnClickListener(v->showPage(destination));MotionFeedback.attach(row);
             LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.bottomMargin=dp(4);items.addView(row,rp);
         }
-        TextView version=text("0.3.13 · 八枪试训",11,MUTED,false);version.setPadding(dp(14),dp(16),dp(14),0);drawerPanel.addView(version);
+        TextView version=text("v0.3.14  /  模型 v6",13,MUTED,false);
+        version.setTypeface(Typeface.MONOSPACE);version.setPadding(dp(12),dp(12),dp(12),0);drawerPanel.addView(version);
         setDrawerOpen(false);
+    }
+
+    private int drawerWidth(int available) {
+        return Math.min(dp(328),Math.max(dp(160),available-dp(48)));
     }
 
     /** Navigation changes visibility only; video and inference retain their existing owners. */
@@ -357,10 +393,11 @@ public final class MainActivity extends Activity {
             pages[i].setVisibility(i==index?View.VISIBLE:View.GONE);
             if(navigationRows[i]!=null){
                 navigationRows[i].setSelected(i==index);animateNavigationSelection(i,i==index?1f:0f);
+                navigationRows[i].getChildAt(navigationRows[i].getChildCount()-1).setVisibility(i==index?View.VISIBLE:View.INVISIBLE);
                 navigationRows[i].setContentDescription(PAGE_TITLES[i]+(i==index?"，当前页面":""));
             }
         }
-        pageTitle.setText(PAGE_TITLES[index]);setDrawerOpen(false);
+        pageTitle.setText(index==PAGE_HOME?"识别工作台":PAGE_TITLES[index]);setDrawerOpen(false);
         if(previous!=index&&pageHost.isLaidOut()&&ValueAnimator.areAnimatorsEnabled()){
             pages[index].setAlpha(.25f);pages[index].setTranslationY(dp(7));
             pages[index].animate().alpha(1f).translationY(0).setDuration(220).setInterpolator(motionEase).start();
@@ -401,113 +438,246 @@ public final class MainActivity extends Activity {
             drawerScrim.animate().alpha(0).setDuration(200).start();
         }else{drawerPanel.setVisibility(View.GONE);drawerScrim.setVisibility(View.GONE);drawerPanel.setTranslationX(0);drawerScrim.setAlpha(0);}
         appBody.setImportantForAccessibility(open?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+        appBody.setDescendantFocusability(open?ViewGroup.FOCUS_BLOCK_DESCENDANTS:ViewGroup.FOCUS_AFTER_DESCENDANTS);
         if(open){drawerPanel.setFocusableInTouchMode(true);drawerPanel.requestFocus();}
         else if(menuButton!=null)menuButton.requestFocus();
     }
 
     private void makeHomePage(LinearLayout content) {
-        marginAdd(content,text("当前识别",12,MUTED,false),0,6);
-        previewRecognition=text("",20,FG,true);marginAdd(content,previewRecognition,0,16);updatePreviewRecognition();
-        videoPreview=new VideoPreview(this);videoPreview.setBackground(roleShape(ThemePalette.PREVIEW,18));
-        videoPreview.setClipToOutline(true);content.addView(videoPreview,new LinearLayout.LayoutParams(-1,-2));
-        videoState=text("未启动",12,MUTED,false);marginAdd(content,videoState,12,14);
-        LinearLayout actions=horizontal();runVideoButton=button("开始接收",true);
-        runVideoButton.setOnClickListener(v->{if(captureRequested)stopVideo("已停止");else startVideo();});
-        actions.addView(runVideoButton,new LinearLayout.LayoutParams(0,dp(48),1));
-        Button source=button("选择视频源",false);source.setOnClickListener(v->showPage(PAGE_SOURCES));
-        LinearLayout.LayoutParams other=new LinearLayout.LayoutParams(0,dp(48),1);other.leftMargin=dp(10);actions.addView(source,other);
-        marginAdd(content,actions,0,20);makeModelCard(content);
-        Button customKeys=button("自定义按键",false);customKeys.setOnClickListener(v->showPage(PAGE_KEYS));marginAdd(content,customKeys,4,8);
-        marginAdd(content,text("枪械、倍镜与配置按键显示在视频上方。",11,MUTED,false),0,0);
+        LinearLayout monitor=card();
+        LinearLayout heading=horizontal();
+        TextView caption=text("当前识别",14,FG,true);
+        heading.addView(caption,new LinearLayout.LayoutParams(0,-2,1));
+        sourceTag=text(videoMode==0?"USB":"NDI",12,ACCENT,true);
+        sourceTag.setContentDescription(videoMode==0?"视频输入：USB":"视频输入：NDI");
+        sourceTag.setTypeface(Typeface.MONOSPACE);sourceTag.setLetterSpacing(.08f);
+        sourceTag.setPadding(dp(10),dp(4),dp(10),dp(4));
+        sourceTag.setBackground(roleShape(ThemePalette.SELECTED,8));heading.addView(sourceTag);
+        monitor.addView(heading);
+        previewRecognition=text("",23,FG,true);marginAdd(monitor,previewRecognition,8,12);updatePreviewRecognition();
+        videoPreview=new VideoPreview(this,palette);videoPreview.setBackground(roleShape(ThemePalette.PREVIEW,14));
+        videoPreview.setClipToOutline(true);monitor.addView(videoPreview,new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout transport=vertical();
+        videoState=text("未启动",13,MUTED,false);marginAdd(transport,videoState,12,12);
+        runVideoButton=button("选择视频源",true);
+        runVideoButton.setOnClickListener(v->{
+            if(captureRequested)stopVideo("已停止");
+            else if(displayedSourceIds.isEmpty())showPage(PAGE_SOURCES);
+            else startVideo();
+        });
+        changeVideoSource=button("切换视频源",false);
+        changeVideoSource.setOnClickListener(v->showPage(PAGE_SOURCES));
+        changeVideoSource.setVisibility(View.GONE);
+        transport.addView(pairedControls(runVideoButton,changeVideoSource));
+        monitor.addView(transport);
+        LinearLayout controls=vertical();
+        LinearLayout transportPanel=modulePanel(UiIcon.VIDEO,"视频接收");
+        transportPanel.setVisibility(View.GONE);marginAdd(controls,transportPanel,0,12);
+        makeModelCard(controls);
+        Button customKeys=button("自定义按键",false);customKeys.setOnClickListener(v->showPage(PAGE_KEYS));
+        customKeys.setCompoundDrawablesRelativeWithIntrinsicBounds(themedIcon(UiIcon.KEYBOARD,ACCENT,20),null,themedIcon(UiIcon.CHEVRON,MUTED,18),null);
+        customKeys.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);customKeys.setCompoundDrawablePadding(dp(12));
+        marginAdd(controls,customKeys,0,0);
+        ConsoleLayout console=new ConsoleLayout(this,monitor,videoPreview,transport,transportPanel,controls);
+        content.addView(console,new LinearLayout.LayoutParams(-1,-2));
+        pageHost.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->console.setViewportHeight(b-t));
+    }
+
+    private LinearLayout modulePanel(int icon, String name) {
+        LinearLayout panel = card();
+        LinearLayout heading = horizontal();
+        ImageView mark = new ImageView(this);
+        mark.setImageDrawable(themedIcon(icon, ACCENT, 18));
+        mark.setScaleType(ImageView.ScaleType.CENTER);
+        mark.setBackground(roleShape(ThemePalette.SELECTED, 8));
+        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        heading.addView(mark, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        TextView title = text(name, 17, FG, true);
+        if (Build.VERSION.SDK_INT >= 28) title.setAccessibilityHeading(true);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1);
+        titleParams.setMarginStart(dp(12));
+        heading.addView(title, titleParams);
+        panel.addView(heading);
+        return panel;
+    }
+
+    /** Switch to a column when the controls' actual width or system text size requires it. */
+    private LinearLayout pairedControls(View first, View second) {
+        LinearLayout pair = new LinearLayout(this) {
+            private int measuredDirection = -1;
+
+            @Override protected void onMeasure(int widthSpec, int heightSpec) {
+                boolean stack = MeasureSpec.getSize(widthSpec) < dp(238 * getResources().getConfiguration().fontScale);
+                int direction = stack ? VERTICAL : HORIZONTAL;
+                if (measuredDirection != direction) {
+                    measuredDirection = direction;
+                    setOrientation(direction);
+                    for (int i = 0; i < getChildCount(); i++) {
+                        LayoutParams item = (LayoutParams) getChildAt(i).getLayoutParams();
+                        item.width = stack ? -1 : 0;
+                        item.height = -2;
+                        item.weight = stack ? 0 : 1;
+                        item.topMargin = stack && i == 1 ? dp(8) : 0;
+                        item.setMarginStart(!stack && i == 1 ? dp(8) : 0);
+                        item.resolveLayoutDirection(getLayoutDirection());
+                    }
+                }
+                super.onMeasure(widthSpec, heightSpec);
+            }
+        };
+        for (View control : new View[]{first, second}) {
+            control.setMinimumHeight(dp(48));
+            pair.addView(control, new LinearLayout.LayoutParams(0, -2, 1));
+        }
+        return pair;
+    }
+
+    private void sectionDivider(LinearLayout panel) {
+        View line = new View(this);
+        line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        line.setBackground(roleShape(ThemePalette.BORDER, 0));
+        panel.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+    }
+
+    private void addSwitch(LinearLayout panel, ElasticSwitch control) {
+        control.setMinHeight(dp(56));
+        control.setPaddingRelative(0, dp(6), dp(2), dp(6));
+        control.setTextSize(16);
+        panel.addView(control, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private ScrollView scrollableDialog(View content) {
+        ScrollView scroll = new ScrollView(themedContext());
+        scroll.setFillViewport(false);
+        scroll.addView(content);
+        return scroll;
     }
 
     private void makeKeysPage(LinearLayout content) {
-        marginAdd(content,text("为每种枪械与倍镜设置按键",18,FG,true),0,6);
-        marginAdd(content,text("38 项规则 · 点击任一项编辑。未分配的规则不会发送按键。",12,MUTED,false),0,16);
-        LinearLayout transfer=horizontal();
-        Button export=button("导出文本",false);export.setOnClickListener(v->exportRulesText());
-        Button incoming=button("导入文本",false);incoming.setOnClickListener(v->showRulesImport(null));
-        transfer.addView(export,new LinearLayout.LayoutParams(0,dp(46),1));
-        LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(0,dp(46),1);ip.leftMargin=dp(10);transfer.addView(incoming,ip);
-        marginAdd(content,transfer,0,8);
-        restoreRulesButton=button("恢复导入前配置",false);restoreRulesButton.setOnClickListener(v->restoreRulesBackup());
-        marginAdd(content,restoreRulesButton,0,14);refreshRuleBackup();
-        ruleRows=vertical();content.addView(ruleRows);drawRuleRows();
-        marginAdd(content,text("“未识别到枪械”仅在正常识别结果没有确定枪型时使用；已识别枪械但倍镜不确定时不会触发。",12,MUTED,false),16,0);
+        LinearLayout transfer = modulePanel(UiIcon.KEYBOARD, "按键配置");
+        marginAdd(transfer, text("38 项规则可导出为文本，也可从文本恢复。", 14, MUTED, false), 12, 12);
+        Button export = button("导出文本", false);
+        export.setOnClickListener(v -> exportRulesText());
+        Button incoming = button("导入文本", false);
+        incoming.setOnClickListener(v -> showRulesImport(null));
+        transfer.addView(pairedControls(export, incoming));
+        restoreRulesButton = button("恢复导入前配置", false);
+        restoreRulesButton.setOnClickListener(v -> restoreRulesBackup());
+        marginAdd(transfer, restoreRulesButton, 8, 0);
+        refreshRuleBackup();
+        marginAdd(content, transfer, 0, 16);
+        ruleRows = vertical();
+        content.addView(ruleRows);
+        drawRuleRows();
     }
 
     private void makeDevicesPage(LinearLayout content) {
-        LinearLayout bc=card(); label(bc,"M3 蓝牙");
-        bleState=text("等待连接",18,FG,true); marginAdd(bc,bleState,10,0);
-        bleDetail=text("扫描附近名称包含 HCL 的设备，选择后完成握手。",12,MUTED,false); marginAdd(bc,bleDetail,7,12);
-        LinearLayout actions=horizontal();
-        scanButton=button("扫描 M3",true); scanButton.setContentDescription("扫描 M3");
-        scanButton.setOnClickListener(v -> { if ("SCANNING".equals(phase)) ble.stopScan(); else scan(); });
-        disconnectButton=button("断开",false); disconnectButton.setEnabled(false);
+        LinearLayout bluetooth = modulePanel(UiIcon.DEVICE, "M3 蓝牙");
+        bleState = text("等待连接", 22, FG, true);
+        marginAdd(bluetooth, bleState, 16, 4);
+        bleDetail = text("扫描附近的 HCL 设备，然后选择要连接的 M3。", 14, MUTED, false);
+        marginAdd(bluetooth, bleDetail, 0, 16);
+
+        scanButton = button("扫描 M3", true);
+        scanButton.setOnClickListener(v -> {
+            if ("SCANNING".equals(phase)) ble.stopScan();
+            else scan();
+        });
+        disconnectButton = button("断开", false);
+        disconnectButton.setEnabled(false);
         disconnectButton.setOnClickListener(v -> ble.disconnect());
-        actions.addView(scanButton,new LinearLayout.LayoutParams(0,dp(46),1));
-        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(dp(78),dp(46)); right.leftMargin=dp(9);
-        actions.addView(disconnectButton,right); bc.addView(actions);
-        bleDevices=vertical(); marginAdd(bc,bleDevices,8,0);
-        notificationView=text("尚未收到设备通知",11,MUTED,false); marginAdd(bc,notificationView,8,0);
-        testButton=button("手动测试一个按键…",false); testButton.setEnabled(false);
-        testButton.setOnClickListener(v -> presentDialog(new AlertDialog.Builder(themedContext()).setTitle("发送一次 F13 测试键")
+        bluetooth.addView(pairedControls(scanButton, disconnectButton));
+        bleDevices = vertical();
+        marginAdd(bluetooth, bleDevices, 8, 8);
+        sectionDivider(bluetooth);
+        notificationView = text("尚未收到设备通知", 13, MUTED, false);
+        marginAdd(bluetooth, notificationView, 12, 8);
+        testButton = button("手动测试一个按键…", false);
+        testButton.setEnabled(false);
+        testButton.setOnClickListener(v -> presentDialog(new AlertDialog.Builder(themedContext())
+            .setTitle("发送一次 F13 测试键")
             .setMessage("请先在接收端打开键盘测试工具。\n\n本次会通过 M3 发送一次 F13；如果外设给此键设置了宏，也可能触发该宏。发送完成仅表示链路已提交，请以接收端结果为准。")
-            .setNegativeButton("取消",null).setPositiveButton("发送一次",(dialog,which) -> ble.sendTestKey(0x68)).create()));
-        marginAdd(bc,testButton,11,0);
-        marginAdd(content,bc,0,13);
+            .setNegativeButton("取消", null)
+            .setPositiveButton("发送一次", (dialog, which) -> ble.sendTestKey(0x68)).create()));
+        marginAdd(bluetooth, testButton, 0, 0);
+        marginAdd(content, bluetooth, 0, 16);
 
-        LinearLayout uc=card(); label(uc,"USB 采集设备");
-        usbState=text("检查 USB 设备",18,FG,true); marginAdd(uc,usbState,10,0);
-        usbDetail=text("仅检查外接 UVC 采集设备，不使用手机前后摄像头。",12,MUTED,false); marginAdd(uc,usbDetail,7,10);
-        Button refresh=button("刷新 USB 设备",false); refresh.setOnClickListener(v -> usb.refresh()); uc.addView(refresh,new LinearLayout.LayoutParams(-1,dp(44)));
-        usbDevices=vertical(); marginAdd(uc,usbDevices,8,0);
-        TextView usbNote=text("在这里授权采集卡，再到“视频源”选择 USB 输入。",11,MUTED,false); marginAdd(uc,usbNote,10,0);
-        marginAdd(content,uc,0,13);
-
+        LinearLayout capture = modulePanel(UiIcon.VIDEO, "USB 采集设备");
+        usbState = text("检查 USB 设备", 22, FG, true);
+        marginAdd(capture, usbState, 16, 4);
+        usbDetail = text("通过 OTG 连接 UVC 采集卡。", 14, MUTED, false);
+        marginAdd(capture, usbDetail, 0, 12);
+        Button refresh = button("刷新 USB 设备", false);
+        refresh.setOnClickListener(v -> usb.refresh());
+        marginAdd(capture, refresh, 0, 0);
+        usbDevices = vertical();
+        marginAdd(capture, usbDevices, 8, 0);
+        marginAdd(capture, text("授权采集卡后，可在「视频源」选择 USB 输入。", 13, MUTED, false), 8, 0);
+        marginAdd(content, capture, 0, 16);
     }
 
     private void makeSettingsPage(LinearLayout content) {
-        LinearLayout appearance=card();label(appearance,"外观");
-        LinearLayout themeRow=horizontal();
-        appearanceLabel=text("",14,FG,true);refreshAppearanceLabel();
-        themeRow.addView(appearanceLabel,new LinearLayout.LayoutParams(0,-2,1));
-        themeToggle=new ThemeToggleView(this);themeToggle.setDark(darkTheme);
-        themeToggle.setOnThemeProgressListener(progress->{if(!destroyed)setThemeProgress(progress);});
-        themeToggle.setOnThemeChangedListener(dark->{if(!destroyed)applyAppearance(dark?2:1);});
-        themeRow.addView(themeToggle,new LinearLayout.LayoutParams(dp(144),dp(84)));marginAdd(appearance,themeRow,2,0);
-        marginAdd(appearance,text("点击或拖动太阳／月亮，界面颜色同步渐变；“选择外观”可恢复跟随系统。",12,MUTED,false),6,12);
-        Button appearanceButton=button("选择外观",false);appearanceButton.setOnClickListener(v->chooseAppearance());marginAdd(appearance,appearanceButton,0,0);
-        Button agreement=button("查看开源许可",false);agreement.setOnClickListener(v->showAgreement(null,false));marginAdd(appearance,agreement,10,0);
-        marginAdd(content,appearance,0,18);
-        LinearLayout playback=card();label(playback,"视频与性能");
-        previewSwitch=themedSwitch();previewSwitch.setText("显示视频预览");previewSwitch.setTextSize(14);
-        previewSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("preview",true));
-        ecoSwitch=themedSwitch();ecoSwitch.setText("节能模式");ecoSwitch.setTextSize(14);
-        ecoSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("eco",false));
-        playback.addView(previewSwitch,new LinearLayout.LayoutParams(-1,dp(52)));playback.addView(ecoSwitch,new LinearLayout.LayoutParams(-1,dp(52)));
-        marginAdd(playback,text("关闭预览仍可识别；节能模式降低画面投递频率。",12,MUTED,false),4,12);
-        videoStats=text("选择输入后点击开始接收",11,MUTED,false);marginAdd(playback,videoStats,0,0);marginAdd(content,playback,0,18);
-        LinearLayout model=card();label(model,"识别模型");
-        modelStatus=text("正在加载八枪模型…",14,FG,true);marginAdd(model,modelStatus,8,7);
-        modelResult=text("等待 1920 × 1080 游戏画面",12,MUTED,false);marginAdd(model,modelResult,0,10);
-        marginAdd(model,text("VK / R301 / 复仇女神 / 转换者 / L-STAR / 猎兽 / CAR：无镜、1 / 2 / 3 / 4 倍；R99：无镜、1 倍。2–4 倍镜按 4 倍处理。",12,MUTED,false),0,10);
-        marginAdd(model,text("本批新增素材仅覆盖：转换者无镜；L-STAR 无镜和 3 倍；猎兽、CAR 为 2 倍。新枪其他倍镜尚未验证；复仇女神仍仅有 2–4 倍镜素材。",12,MUTED,false),0,0);
-        marginAdd(content,model,0,18);
-        LinearLayout lc=card(); label(lc,"诊断记录");
-        marginAdd(lc,text("记录连接阶段和错误，便于后续排查。",12,MUTED,false),7,9);
-        LinearLayout logActions=horizontal();
-        Button export=button("导出记录",false); export.setOnClickListener(v -> exportReport());
-        Button copy=button("复制摘要",false); copy.setOnClickListener(v -> {
-            ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
-            clipboard.setPrimaryClip(ClipData.newPlainText("映枢连接摘要",summary()));
-            Toast.makeText(this,"已复制连接摘要",Toast.LENGTH_SHORT).show();
+        LinearLayout appearance = modulePanel(UiIcon.SETTINGS, "外观");
+        LinearLayout themeRow = horizontal();
+        appearanceLabel = text("", 16, FG, true);
+        refreshAppearanceLabel();
+        themeRow.addView(appearanceLabel, new LinearLayout.LayoutParams(0, -2, 1));
+        themeToggle = new ThemeToggleView(this);
+        themeToggle.setDark(darkTheme);
+        themeToggle.setOnThemeProgressListener(progress -> { if (!destroyed) setThemeProgress(progress); });
+        themeToggle.setOnThemeChangedListener(dark -> { if (!destroyed) applyAppearance(dark ? 2 : 1); });
+        themeRow.addView(themeToggle, new LinearLayout.LayoutParams(dp(128), dp(72)));
+        marginAdd(appearance, themeRow, 8, 0);
+        marginAdd(appearance, text("拖动或轻点切换明暗，可在「选择外观」中跟随系统。", 14, MUTED, false), 0, 12);
+        Button choose = button("选择外观", false);
+        choose.setOnClickListener(v -> chooseAppearance());
+        marginAdd(appearance, choose, 0, 0);
+        marginAdd(content, appearance, 0, 16);
+
+        LinearLayout playback = modulePanel(UiIcon.VIDEO, "视频与性能");
+        previewSwitch = themedSwitch();
+        previewSwitch.setText("显示视频预览");
+        previewSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("preview", true));
+        ecoSwitch = themedSwitch();
+        ecoSwitch.setText("节能模式");
+        ecoSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("eco", false));
+        addSwitch(playback, previewSwitch);
+        sectionDivider(playback);
+        addSwitch(playback, ecoSwitch);
+        marginAdd(playback, text("关闭预览仍可识别。节能模式会降低画面采样频率。", 13, MUTED, false), 0, 12);
+        sectionDivider(playback);
+        videoStats = text("选择输入后点击开始接收", 13, MUTED, false);
+        marginAdd(playback, videoStats, 12, 0);
+        marginAdd(content, playback, 0, 16);
+
+        LinearLayout model = modulePanel(UiIcon.RECOGNIZE, "识别模型");
+        modelStatus = text("正在加载八枪模型…", 17, FG, true);
+        marginAdd(model, modelStatus, 14, 4);
+        modelResult = text("等待 1920 × 1080 游戏画面", 14, MUTED, false);
+        marginAdd(model, modelResult, 0, 12);
+        sectionDivider(model);
+        marginAdd(model, text("R99 支持无镜和 1 倍。其余七把枪可配置无镜、1、2、3、4 倍，2–4 倍可调镜按 4 倍处理。", 14, MUTED, false), 12, 0);
+        marginAdd(content, model, 0, 16);
+
+        LinearLayout diagnostics = modulePanel(UiIcon.DEVICE, "诊断记录");
+        Button export = button("导出记录", false);
+        export.setOnClickListener(v -> exportReport());
+        Button copy = button("复制摘要", false);
+        copy.setOnClickListener(v -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("映枢连接摘要", summary()));
+            Toast.makeText(this, "已复制连接摘要", Toast.LENGTH_SHORT).show();
         });
-        logActions.addView(export,new LinearLayout.LayoutParams(0,dp(44),1));
-        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,dp(44),1); cp.leftMargin=dp(8); logActions.addView(copy,cp);lc.addView(logActions);
-        logView=text("准备就绪",10,MUTED,false); logView.setTypeface(Typeface.MONOSPACE);logView.setTextIsSelectable(true);
-        marginAdd(lc,logView,12,0); content.addView(lc);
-        marginAdd(content,text("离开应用会停止视频并断开 M3 · 不自动启动",10,MUTED,false),18,0);
+        marginAdd(diagnostics, pairedControls(export, copy), 16, 0);
+        logView = text("准备就绪", 13, MUTED, false);
+        logView.setTypeface(Typeface.MONOSPACE);
+        logView.setTextIsSelectable(true);
+        marginAdd(diagnostics, logView, 12, 0);
+        marginAdd(content, diagnostics, 0, 16);
+        Button agreement = button("查看开源许可", false);
+        agreement.setOnClickListener(v -> showAgreement(null, false));
+        marginAdd(content, agreement, 0, 0);
+        marginAdd(content, text("离开应用时视频接收会停止，M3 会断开连接。", 13, MUTED, false), 12, 0);
     }
 
     private void chooseAppearance() {
@@ -542,7 +712,7 @@ public final class MainActivity extends Activity {
             TextView heading=text("映枢 · AGPL 开源",20,FG,true);heading.setGravity(Gravity.CENTER);
             welcome.addView(heading,new FrameLayout.LayoutParams(-1,-1));setContentView(welcome);
         }
-        TextView body=text(agreement,13,FG,false);body.setTextIsSelectable(true);body.setPadding(dp(22),dp(12),dp(22),dp(12));
+        TextView body=text(agreement,15,FG,false);body.setTextIsSelectable(true);body.setPadding(dp(22),dp(12),dp(22),dp(12));
         ScrollView scroll=new ScrollView(themedContext());scroll.addView(body);
         LinearLayout holder=vertical();holder.addView(scroll,new LinearLayout.LayoutParams(-1,Math.min(dp(420),getResources().getDisplayMetrics().heightPixels/2)));
         AlertDialog.Builder builder=new AlertDialog.Builder(themedContext()).setTitle(AppAgreement.TITLE).setView(holder);
@@ -579,8 +749,11 @@ public final class MainActivity extends Activity {
     private void exportRulesText(){
         final String content=RuleTextCodec.encode(ruleBook);boolean copied=false;
         try{((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("映枢按键配置",content));copied=true;}catch(Exception ignored){}
-        TextView body=text(content,11,FG,false);body.setTypeface(Typeface.MONOSPACE);body.setTextIsSelectable(true);body.setPadding(dp(18),dp(12),dp(18),dp(12));
-        ScrollView scroll=new ScrollView(themedContext());scroll.addView(body);LinearLayout holder=vertical();holder.addView(scroll,new LinearLayout.LayoutParams(-1,dp(280)));
+        TextView body=text(content,14,FG,false);body.setTypeface(Typeface.MONOSPACE);body.setTextIsSelectable(true);body.setPadding(dp(20),dp(12),dp(20),dp(12));
+        ScrollView scroll = scrollableDialog(body);
+        LinearLayout holder = vertical();
+        int maxHeight = Math.min(dp(320), getResources().getDisplayMetrics().heightPixels / 2);
+        holder.addView(scroll, new LinearLayout.LayoutParams(-1, maxHeight));
         presentDialog(new AlertDialog.Builder(themedContext()).setTitle(copied?"38 项按键已复制":"按键配置文本").setView(holder).setPositiveButton("关闭",null)
             .setNeutralButton("保存 TXT",(dialog,which)->{
                 pendingRuleExport=content;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("text/plain");
@@ -590,11 +763,14 @@ public final class MainActivity extends Activity {
     private void showRulesImport(String supplied){
         if(!keyQuestionAccepted())return;
         Context context=themedContext();LinearLayout form=new LinearLayout(context);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(20),dp(8),dp(20),0);
-        marginAdd(form,text("导入会替换全部 38 项按键，并保留导入前配置。不会导入协议确认或连接信息。",12,MUTED,false),0,10);
-        EditText input=new EditText(context);input.setContentDescription("按键配置文本");input.setGravity(Gravity.TOP);input.setTextSize(12);input.setTypeface(Typeface.MONOSPACE);input.setTextColor(FG);input.setHintTextColor(MUTED);
+        marginAdd(form,text("导入会替换全部 38 项按键。你可以恢复导入前的配置。",14,MUTED,false),0,12);
+        TextView inputLabel = text("按键配置文本",14,FG,true);
+        marginAdd(form,inputLabel,0,6);
+        EditText input=new EditText(context);input.setId(View.generateViewId());inputLabel.setLabelFor(input.getId());input.setGravity(Gravity.TOP);input.setTextSize(14);input.setTypeface(Typeface.MONOSPACE);input.setTextColor(FG);input.setHintTextColor(MUTED);
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setHint("粘贴 YINGSHU_KEYS_V1 配置文本");
-        input.setBackground(shape(CARD,14,BORDER));input.setPadding(dp(12),dp(10),dp(12),dp(10));form.addView(input,new LinearLayout.LayoutParams(-1,dp(220)));
+        input.setBackground(shape(CARD,12,BORDER));input.setPadding(dp(12),dp(10),dp(12),dp(10));
+        input.setMinLines(3);input.setMaxLines(7);form.addView(input,new LinearLayout.LayoutParams(-1,-2));
         String initial=supplied;
         if(initial==null){try{
             ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);ClipData clip=clipboard.getPrimaryClip();
@@ -603,7 +779,7 @@ public final class MainActivity extends Activity {
         if(initial!=null)input.setText(initial);
         Button clear=button("清空文本",false);clear.setOnClickListener(v->input.setText(""));marginAdd(form,clear,8,8);
         TextView error=text("",12,WARN,false);error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);form.addView(error);
-        AlertDialog dialog=new AlertDialog.Builder(context).setTitle("导入按键文本").setView(form).setNegativeButton("取消",null).setPositiveButton("导入",null)
+        AlertDialog dialog=new AlertDialog.Builder(context).setTitle("导入按键文本").setView(scrollableDialog(form)).setNegativeButton("取消",null).setPositiveButton("导入",null)
             .setNeutralButton("读取 TXT",(d,which)->{Intent open=new Intent(Intent.ACTION_OPEN_DOCUMENT);open.addCategory(Intent.CATEGORY_OPENABLE);open.setType("text/*");startActivityForResult(open,REQUEST_RULE_IMPORT);}).create();
         presentDialog(dialog);dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN|WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         form.setFocusableInTouchMode(true);form.requestFocus();
@@ -611,7 +787,7 @@ public final class MainActivity extends Activity {
             try{RuleTextCodec.Parsed parsed=RuleTextCodec.decode(input.getText().toString(),ruleBook);
                 if(applyRuleImport(parsed,false)){dialog.dismiss();Toast.makeText(this,"已导入 38 项，已分配 "+parsed.assignedCount+" 项",Toast.LENGTH_LONG).show();}
                 else error.setText("保存失败，原配置保留，请重试。");
-            }catch(IllegalArgumentException failure){error.setText(failure.getMessage());}
+            }catch(IllegalArgumentException failure){error.setText(failure.getMessage());input.setError(failure.getMessage());input.requestFocus();}
         });
     }
     private boolean applyRuleImport(RuleTextCodec.Parsed parsed,boolean restoring){
@@ -650,66 +826,130 @@ public final class MainActivity extends Activity {
     }
 
     private void makeModelCard(LinearLayout parent) {
-        LinearLayout controls=card();
-        recognitionSwitch=themedSwitch();recognitionSwitch.setText("识别枪械和倍镜");recognitionSwitch.setTextSize(14);
-        recognitionSwitch.setChecked(true);controls.addView(recognitionSwitch,new LinearLayout.LayoutParams(-1,dp(50)));
-        recognitionSwitch.setOnCheckedChangeListener((v,checked)->{
-            if(ndi!=null)ndi.setRecognitionEnabled(checked);resetRecognition();
+        LinearLayout controls = modulePanel(UiIcon.KEYBOARD, "识别与按键");
+        recognitionSwitch = themedSwitch();
+        recognitionSwitch.setText("识别枪械和倍镜");
+        recognitionSwitch.setChecked(true);
+        addSwitch(controls, recognitionSwitch);
+        recognitionSwitch.setOnCheckedChangeListener((v, checked) -> {
+            if (ndi != null) ndi.setRecognitionEnabled(checked);
+            resetRecognition();
         });
-        outputSwitch=themedSwitch();outputSwitch.setText("按识别结果发送按键");outputSwitch.setTextSize(14);
-        outputSwitch.setChecked(false);controls.addView(outputSwitch,new LinearLayout.LayoutParams(-1,dp(50)));
-        outputSwitch.setOnCheckedChangeListener((v,checked)->{
-            ruleGate.reset();outputStatus.setText(idleOutputStatus());log("MAPPED_KEY_OUTPUT "+checked);
+        sectionDivider(controls);
+        outputSwitch = themedSwitch();
+        outputSwitch.setText("按识别结果发送按键");
+        outputSwitch.setChecked(false);
+        addSwitch(controls, outputSwitch);
+        outputSwitch.setOnCheckedChangeListener((v, checked) -> {
+            ruleGate.reset();
+            outputStatus.setText(idleOutputStatus());
+            log("MAPPED_KEY_OUTPUT " + checked);
         });
-        outputStatus=text(idleOutputStatus(),12,MUTED,false);marginAdd(controls,outputStatus,8,0);marginAdd(parent,controls,0,12);
-        marginAdd(parent,text("稳定识别后发送一次；状态改变后再发送。自动输出每次启动默认关闭。",11,MUTED,false),0,14);
+        outputStatus = text(idleOutputStatus(), 13, MUTED, false);
+        marginAdd(controls, outputStatus, 4, 0);
+        marginAdd(parent, controls, 0, 12);
     }
 
     private void drawRuleRows() {
-        ruleRows.removeAllViews();String previous="";
-        for(RuleBook.Rule rule:ruleBook.rules){
-            boolean unknown=RuleBook.UNKNOWN_GUN_ID.equals(rule.id);
-            if(!rule.gun.equals(previous)){
-                marginAdd(ruleRows,text(unknown?"其他情况":RuleBook.gunName(rule.gun),13,MUTED,true),previous.isEmpty()?0:24,8);previous=rule.gun;
+        ruleRows.removeAllViews();
+        String previous = null;
+        LinearLayout group = null;
+        for (RuleBook.Rule rule : ruleBook.rules) {
+            boolean unknown = RuleBook.UNKNOWN_GUN_ID.equals(rule.id);
+            if (!rule.gun.equals(previous)) {
+                group = card();
+                TextView heading = text(unknown ? "其他情况" : RuleBook.gunName(rule.gun), 19, FG, true);
+                if (Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
+                marginAdd(group, heading, 0, 8);
+                if (unknown) {
+                    marginAdd(group, text("无法确定枪型时使用。已识别枪型、倍镜未确定时会等待下一次结果。", 14, MUTED, false), 0, 8);
+                }
+                marginAdd(ruleRows, group, 0, 16);
+                previous = rule.gun;
             }
-            LinearLayout row=horizontal();row.setPadding(dp(14),dp(14),dp(12),dp(14));row.setMinimumHeight(dp(56));row.setBackground(ripple(CARD,14));
-            TextView title=text(unknown?"未识别到枪械":RuleBook.opticName(rule.optic),14,FG,false);
-            row.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-            TextView key=text(KeyCatalog.name(rule.usage,rule.modifiers),13,rule.usage==0?MUTED:FG,true);key.setGravity(Gravity.RIGHT);
-            row.addView(key,new LinearLayout.LayoutParams(-2,-2));
-            ImageView edit=new ImageView(this);edit.setImageDrawable(themedIcon(UiIcon.CHEVRON,MUTED,18));
-            LinearLayout.LayoutParams arrow=new LinearLayout.LayoutParams(dp(18),dp(18));arrow.leftMargin=dp(8);row.addView(edit,arrow);
-            row.setContentDescription("设置 "+rule.title()+" 的按键，当前 "+KeyCatalog.name(rule.usage,rule.modifiers));
-            row.setFocusable(true);row.setOnClickListener(v->editRule(rule));MotionFeedback.attach(row);marginAdd(ruleRows,row,0,5);
+            sectionDivider(group);
+            LinearLayout row = horizontal();
+            row.setPaddingRelative(dp(4), dp(8), dp(4), dp(8));
+            row.setMinimumHeight(dp(56));
+            row.setBackground(ripple(CARD, 8));
+            TextView optic = text(unknown ? "未识别到枪械" : RuleBook.opticName(rule.optic), 15, FG, false);
+            row.addView(optic, new LinearLayout.LayoutParams(0, -2, 1));
+            String binding = KeyCatalog.name(rule.usage, rule.modifiers);
+            TextView key = text(binding, 14, rule.usage == 0 ? MUTED : ACCENT, rule.usage != 0);
+            key.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+            row.addView(key, new LinearLayout.LayoutParams(0, -2, 1));
+            ImageView chevron = new ImageView(this);
+            chevron.setImageDrawable(themedIcon(UiIcon.CHEVRON, MUTED, 16));
+            chevron.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            LinearLayout.LayoutParams arrow = new LinearLayout.LayoutParams(dp(16), dp(16));
+            arrow.setMarginStart(dp(8));
+            row.addView(chevron, arrow);
+            row.setContentDescription("设置 " + rule.title() + " 的按键，当前 " + binding);
+            row.setFocusable(true);
+            row.setOnClickListener(v -> editRule(rule));
+            MotionFeedback.attach(row);
+            group.addView(row);
         }
     }
 
     private void editRule(RuleBook.Rule rule) {
-        Context editorContext=themedContext();
-        LinearLayout form=new LinearLayout(editorContext);form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(22),dp(10),dp(22),dp(6));
-        final int[] selectedUsage={rule.usage};
-        Button keys=button("主按键 · "+KeyCatalog.name(selectedUsage[0],0),false);
-        keys.setContentDescription("选择主按键，当前 "+KeyCatalog.name(selectedUsage[0],0));
-        keys.setOnClickListener(v->SearchableKeyPicker.show(themedContext(),selectedUsage[0],BG,CARD,FG,MUTED,ACCENT,BORDER,usage->{
-            selectedUsage[0]=usage;keys.setText("主按键 · "+KeyCatalog.name(usage,0));
-            keys.setContentDescription("选择主按键，当前 "+KeyCatalog.name(usage,0));
+        Context editorContext = themedContext();
+        LinearLayout form = new LinearLayout(editorContext);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(12), dp(20), dp(8));
+        int[] selectedUsage = {rule.usage};
+        TextView keyLabel = text("主按键", 14, MUTED, true);
+        form.addView(keyLabel);
+        Button keys = button(KeyCatalog.name(selectedUsage[0], 0), false);
+        keys.setId(View.generateViewId());
+        keyLabel.setLabelFor(keys.getId());
+        keys.setContentDescription("选择主按键，当前 " + KeyCatalog.name(selectedUsage[0], 0));
+        keys.setOnClickListener(v -> SearchableKeyPicker.show(themedContext(), selectedUsage[0], BG, CARD, FG, MUTED, ACCENT, BORDER, usage -> {
+            selectedUsage[0] = usage;
+            String name = KeyCatalog.name(usage, 0);
+            keys.setText(name);
+            keys.setContentDescription("选择主按键，当前 " + name);
         }));
-        form.addView(keys,new LinearLayout.LayoutParams(-1,dp(48)));
-        marginAdd(form,text("点击主按键可搜索；修饰键可在下方组合。",12,MUTED,false),9,8);
-        CheckBox[] modifiers=new CheckBox[4];String[] titles={"Ctrl","Shift","Alt","Win"};
-        for(int i=0;i<4;i++){modifiers[i]=new CheckBox(editorContext);modifiers[i].setText(titles[i]);modifiers[i].setChecked((rule.modifiers&(1<<i))!=0);form.addView(modifiers[i]);}
-        presentDialog(new AlertDialog.Builder(editorContext).setTitle(rule.title()).setView(form).setNegativeButton("取消",null)
-            .setPositiveButton("保存",(dialog,which)->{
-                int usage=selectedUsage[0],mask=0;
-                for(int i=0;i<4;i++)if(modifiers[i].isChecked())mask|=1<<i;
-                if(usage==0)mask=0;
-                boolean saved=getSharedPreferences("recognition-rules",MODE_PRIVATE).edit().putInt(rule.id+".key",usage).putInt(rule.id+".mod",mask).commit();
-                if(!saved){Toast.makeText(this,"保存失败，原规则保留",Toast.LENGTH_SHORT).show();return;}
-                rule.usage=usage;rule.modifiers=mask;ruleGate.reset();drawRuleRows();
-                updatePreviewRecognition();outputStatus.setText(idleOutputStatus());
-                log("RULE_SAVED "+rule.id+" "+KeyCatalog.name(usage,mask));
-            }).create());
+        marginAdd(form, keys, 8, 16);
+        form.addView(text("修饰键", 14, MUTED, true));
+        CheckBox[] modifiers = new CheckBox[4];
+        String[] titles = {"Ctrl", "Shift", "Alt", "Win"};
+        for (int i = 0; i < modifiers.length; i++) {
+            CheckBox modifier = new CheckBox(editorContext);
+            modifier.setText(titles[i]);
+            modifier.setTextSize(15);
+            themeText(modifier, FG);
+            modifier.setButtonTintList(new android.content.res.ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{ACCENT, MUTED}));
+            modifier.setChecked((rule.modifiers & (1 << i)) != 0);
+            modifiers[i] = modifier;
+        }
+        marginAdd(form, pairedControls(modifiers[0], modifiers[1]), 4, 0);
+        marginAdd(form, pairedControls(modifiers[2], modifiers[3]), 0, 0);
+        AlertDialog dialog = new AlertDialog.Builder(editorContext).setTitle(rule.title())
+            .setView(scrollableDialog(form)).setNegativeButton("取消", null).setPositiveButton("保存", null).create();
+        presentDialog(dialog);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            int usage = selectedUsage[0], mask = 0;
+            if (usage != 0) {
+                for (int i = 0; i < modifiers.length; i++) if (modifiers[i].isChecked()) mask |= 1 << i;
+            }
+            boolean saved = getSharedPreferences("recognition-rules", MODE_PRIVATE).edit()
+                .putInt(rule.id + ".key", usage).putInt(rule.id + ".mod", mask).commit();
+            if (!saved) {
+                Toast.makeText(this, "保存失败，请重试", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            rule.usage = usage;
+            rule.modifiers = mask;
+            ruleGate.reset();
+            drawRuleRows();
+            updatePreviewRecognition();
+            outputStatus.setText(idleOutputStatus());
+            log("RULE_SAVED " + rule.id + " " + KeyCatalog.name(usage, mask));
+            dialog.dismiss();
+        });
     }
 
     private String idleOutputStatus() {
@@ -835,28 +1075,60 @@ public final class MainActivity extends Activity {
     }
 
     private void makeVideoSourcePage(LinearLayout parent) {
-        marginAdd(parent,text("选择电脑画面的输入方式",18,FG,true),0,8);
-        marginAdd(parent,text("先选择并刷新来源，再开始接收。接收期间请先停止视频再切换来源。",12,MUTED,false),0,18);
-        LinearLayout card=card();label(card,"视频输入");
-        videoKind=themedSpinner();
-        videoKind.setAdapter(themedAdapter(java.util.Arrays.asList("USB · 电脑画面（采集卡）","NDI · 局域网视频")));
+        LinearLayout transport = modulePanel(UiIcon.VIDEO, "输入方式");
+        videoKind = themedSpinner();
+        videoKind.setAdapter(themedAdapter(java.util.Arrays.asList("USB · 电脑画面（采集卡）", "NDI · 局域网视频")));
         videoKind.setSelection(videoMode);
-        marginAdd(card,videoKind,8,3);
-        ndiOptions=vertical();ndiOptions.setVisibility(View.GONE);
-        ndiHost=new EditText(themedContext());ndiHost.setSingleLine(true);ndiHost.setTextSize(12);themeText(ndiHost,FG);ndiHost.setHint("发送端 IP（可选，自动发现失败时填写）");
-        palette.bind(ndiHost,(view,p)->{view.setHintTextColor(p.color(ThemePalette.MUTED));view.setBackgroundTintList(android.content.res.ColorStateList.valueOf(p.color(ThemePalette.MUTED)));});
-        ndiHost.setText(getPreferences(MODE_PRIVATE).getString("ndiHost",""));
-        ndiOptions.addView(ndiHost,new LinearLayout.LayoutParams(-1,dp(44)));
-        TextView ndiLink=text("NDI®  ·  ndi.video ↗",11,ACCENT,false);
-        ndiLink.setPadding(0,dp(8),0,dp(8));
-        ndiLink.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://ndi.video/"))));
-        ndiOptions.addView(ndiLink);ndiOptions.addView(text("NDI® is a registered trademark of Vizrt NDI AB.",9,MUTED,false));
-        marginAdd(card,ndiOptions,0,7);
-        videoSources=themedSpinner();marginAdd(card,videoSources,0,5);
-        refreshVideoButton=button("刷新视频源",false);refreshVideoButton.setOnClickListener(v->refreshSources());marginAdd(card,refreshVideoButton,0,12);
-        sourceRunButton=button("开始接收",true);sourceRunButton.setOnClickListener(v->{if(captureRequested)stopVideo("已停止");else startVideo();});marginAdd(card,sourceRunButton,4,0);
-        marginAdd(parent,card,0,16);
-        Button back=button("查看识别画面",false);back.setOnClickListener(v->showPage(PAGE_HOME));marginAdd(parent,back,0,0);
+        videoKind.setContentDescription("输入方式");
+        videoKind.setMinimumHeight(dp(48));
+        marginAdd(transport, videoKind, 8, 0);
+
+        ndiOptions = vertical();
+        ndiOptions.setVisibility(View.GONE);
+        TextView hostLabel = text("发送端 IP（可选）", 14, FG, true);
+        ndiOptions.addView(hostLabel);
+        ndiHost = new EditText(themedContext());
+        ndiHost.setId(View.generateViewId());
+        hostLabel.setLabelFor(ndiHost.getId());
+        ndiHost.setSingleLine(true);
+        ndiHost.setMinHeight(dp(48));
+        ndiHost.setTextSize(15);
+        themeText(ndiHost, FG);
+        ndiHost.setHint("自动发现失败时填写");
+        ndiHost.setBackground(shape(CARD, 12, BORDER));
+        ndiHost.setPadding(dp(12), dp(8), dp(12), dp(8));
+        palette.bind(ndiHost, (field, p) -> field.setHintTextColor(p.color(ThemePalette.MUTED)));
+        ndiHost.setText(getPreferences(MODE_PRIVATE).getString("ndiHost", ""));
+        marginAdd(ndiOptions, ndiHost, 8, 0);
+        TextView ndiLink = text("NDI®  ·  ndi.video ↗", 14, ACCENT, false);
+        ndiLink.setGravity(Gravity.CENTER_VERTICAL);
+        ndiLink.setMinimumHeight(dp(48));
+        ndiLink.setFocusable(true);
+        ndiLink.setBackground(ripple(CARD, 8));
+        ndiLink.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://ndi.video/"))));
+        ndiOptions.addView(ndiLink);
+        ndiOptions.addView(text("NDI® is a registered trademark of Vizrt NDI AB.", 12, MUTED, false));
+        marginAdd(transport, ndiOptions, 12, 0);
+        marginAdd(parent, transport, 0, 16);
+
+        LinearLayout sources = modulePanel(UiIcon.DEVICE, "可用视频源");
+        videoSources = themedSpinner();
+        videoSources.setContentDescription("可用视频源");
+        videoSources.setMinimumHeight(dp(48));
+        marginAdd(sources, videoSources, 8, 8);
+        refreshVideoButton = button("刷新视频源", false);
+        refreshVideoButton.setOnClickListener(v -> refreshSources());
+        sourceRunButton = button("开始接收", true);
+        sourceRunButton.setOnClickListener(v -> {
+            if (captureRequested) stopVideo("已停止");
+            else startVideo();
+        });
+        sources.addView(pairedControls(refreshVideoButton, sourceRunButton));
+        marginAdd(sources, text("要切换输入，请先停止当前接收。", 13, MUTED, false), 12, 0);
+        marginAdd(parent, sources, 0, 16);
+        Button back = button("查看识别画面", false);
+        back.setOnClickListener(v -> showPage(PAGE_HOME));
+        marginAdd(parent, back, 0, 0);
     }
 
     private void bindVideoControls() {
@@ -875,6 +1147,8 @@ public final class MainActivity extends Activity {
                 if(uvc==null||ndi==null||usb==null)return;
                 if(captureRequested)return;
                 if(videoMode!=position) { uvc.stop();ndi.stop();videoMode=position; }
+                String sourceName=videoMode==0?"USB":"NDI";
+                sourceTag.setText(sourceName);sourceTag.setContentDescription("视频输入："+sourceName);
                 getPreferences(MODE_PRIVATE).edit().putInt("videoMode",position).apply();
                 ndiOptions.setVisibility(position==1?View.VISIBLE:View.GONE);
                 videoState.setText("未启动");videoStats.setText("刷新视频源后开始接收");videoPreview.receiving(false);videoPreview.clear("选择视频源，开始接收");
@@ -895,6 +1169,7 @@ public final class MainActivity extends Activity {
         if(names.isEmpty())names.add(videoMode==0?"未发现采集卡，请通过 OTG 接入":"尚未发现 NDI 源，请刷新");
         videoSources.setAdapter(themedAdapter(names));
         int selected=displayedSourceIds.indexOf(previous);if(selected>=0)videoSources.setSelection(selected);
+        updateVideoControls();
     }
     private void refreshSources() {
         if(captureRequested)return;
@@ -922,7 +1197,13 @@ public final class MainActivity extends Activity {
         lastVideo=reason;
     }
     private void updateVideoControls() {
-        runVideoButton.setText(captureRequested?"停止接收":"开始接收");sourceRunButton.setText(captureRequested?"停止接收":"开始接收");videoKind.setEnabled(!captureRequested);videoSources.setEnabled(!captureRequested);refreshVideoButton.setEnabled(!captureRequested);ndiHost.setEnabled(!captureRequested);
+        boolean hasSource=!displayedSourceIds.isEmpty();
+        runVideoButton.setText(captureRequested?"停止接收":hasSource?"开始接收":"选择视频源");
+        changeVideoSource.setVisibility(hasSource&&!captureRequested?View.VISIBLE:View.GONE);
+        sourceRunButton.setText(captureRequested?"停止接收":"开始接收");
+        sourceRunButton.setEnabled(captureRequested||hasSource);
+        videoKind.setEnabled(!captureRequested);videoSources.setEnabled(!captureRequested);
+        refreshVideoButton.setEnabled(!captureRequested);ndiHost.setEnabled(!captureRequested);
     }
     private void captureState(int source,String state,String detail) {
         if(destroyed)return;log((source==0?"UVC_STATE ":"NDI_STATE ")+state+" | "+detail);
@@ -985,7 +1266,7 @@ public final class MainActivity extends Activity {
             Button connect=button(busy&&address.equals(selectedAddress)?("READY".equals(phase)?"握手成功":"连接中…"):"连接此设备",false);
             connect.setEnabled(!busy);
             connect.setOnClickListener(v->{ selectedAddress=address;ble.connect(address); });
-            row.addView(connect,new LinearLayout.LayoutParams(-1,dp(40)));marginAdd(bleDevices,row,6,0);
+            row.addView(connect,new LinearLayout.LayoutParams(-1,-2));marginAdd(bleDevices,row,8,0);
         }
     }
 
@@ -999,7 +1280,7 @@ public final class MainActivity extends Activity {
                     if(captureRequested)Toast.makeText(this,"请先停止视频，再单独检查 USB 设备",Toast.LENGTH_SHORT).show();
                     else openUsb(info.id);
                 });
-                row.addView(open,new LinearLayout.LayoutParams(-1,dp(42)));
+                row.addView(open,new LinearLayout.LayoutParams(-1,-2));
             } else marginAdd(row,text("不是 UVC 视频设备",11,MUTED,false),4,0);
             marginAdd(usbDevices,row,6,0);
         }
@@ -1051,7 +1332,7 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private String summary() { return "映枢 0.3.13-trial · 八枪与倍镜\n设备："+Build.MANUFACTURER+" "+Build.MODEL+" / Android "+Build.VERSION.RELEASE+"\n视频："+lastVideo+"\n统计："+videoStats.getText()+"\n预览："+previewSwitch.isChecked()+"\n节能："+ecoSwitch.isChecked()+"\nM3："+stateName(phase)+"\n地址："+selectedAddress+"\n序列号："+serial+"\nUSB："+lastUsb+"\n模型："+modelStatus.getText()+"\n识别："+lastRecognition+"\n规则发键："+outputSwitch.isChecked()+"\n"; }
+    private String summary() { return "映枢 0.3.14-trial · 八枪与倍镜\n设备："+Build.MANUFACTURER+" "+Build.MODEL+" / Android "+Build.VERSION.RELEASE+"\n视频："+lastVideo+"\n统计："+videoStats.getText()+"\n预览："+previewSwitch.isChecked()+"\n节能："+ecoSwitch.isChecked()+"\nM3："+stateName(phase)+"\n地址："+selectedAddress+"\n序列号："+serial+"\nUSB："+lastUsb+"\n模型："+modelStatus.getText()+"\n识别："+lastRecognition+"\n规则发键："+outputSwitch.isChecked()+"\n"; }
     private String fullReport() { return summary()+"\n诊断日志\n"+String.join("\n",logs)+"\n"; }
     private void log(String message) {
         if(destroyed)return;
@@ -1085,17 +1366,37 @@ public final class MainActivity extends Activity {
     }
     private GradientDrawable roleShape(int role,int radius){GradientDrawable d=new LiveGradientDrawable();d.setCornerRadius(dp(radius));palette.bind(d,(shape,p)->shape.setColor(p.color(role)));return d;}
     private GradientDrawable fixedShape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setCornerRadius(dp(radius));d.setColor(color);return d;}
-    private LinearLayout card() { LinearLayout v=vertical();v.setPadding(dp(16),dp(16),dp(16),dp(16));v.setBackground(shape(CARD,20,0));return v; }
-    private void label(LinearLayout parent,String title) { parent.addView(text(title,12,MUTED,true)); }
+    private LinearLayout card() {
+        LinearLayout panel=vertical();
+        panel.setBackground(shape(CARD,18,BORDER));
+        panel.setPadding(dp(16),dp(16),dp(16),dp(16));
+        return panel;
+    }
+    private void label(LinearLayout parent,String title) {
+        LinearLayout heading=horizontal();
+        View line=new View(this);
+        line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        line.setBackground(roleShape(ThemePalette.VIOLET,2));
+        LinearLayout.LayoutParams mark=new LinearLayout.LayoutParams(dp(3),dp(15));
+        mark.setMarginEnd(dp(8));heading.addView(line,mark);
+        TextView headingText=text(title,16,FG,true);
+        if(Build.VERSION.SDK_INT>=28)headingText.setAccessibilityHeading(true);
+        heading.addView(headingText);parent.addView(heading);
+    }
     private android.graphics.drawable.RippleDrawable ripple(int fill,int radius) {
         return themedRipple(shape(fill,radius,0),radius,false);
     }
     private android.graphics.drawable.RippleDrawable themedRipple(android.graphics.drawable.Drawable content,int radius,boolean primary){
         android.graphics.drawable.RippleDrawable d=new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x16000000),content,fixedShape(Color.WHITE,radius));
-        palette.bind(d,(r,p)->r.setColor(android.content.res.ColorStateList.valueOf(primary?0x28ffffff:p.color(ThemePalette.RIPPLE))));return d;
+        palette.bind(d,(r,p)->r.setColor(android.content.res.ColorStateList.valueOf(p.color(primary?ThemePalette.BUTTON_RIPPLE:ThemePalette.RIPPLE))));return d;
     }
     private UiIcon themedIcon(int kind,int color,int size){UiIcon icon=new UiIcon(kind,color,dp(size));ThemePalette.Ref ref=palette.ref(color);palette.bind(icon,(i,p)->i.setColor(ref.color(p)));return icon;}
-    private ElasticSwitch themedSwitch(){ElasticSwitch view=new ElasticSwitch(this);themeText(view,FG);palette.bind(view,(s,p)->s.setOffColor(p.color(ThemePalette.SWITCH_OFF)));return view;}
+    private ElasticSwitch themedSwitch(){
+        ElasticSwitch view=new ElasticSwitch(this);themeText(view,FG);
+        palette.bind(view,(s,p)->s.setTrackColors(p.color(ThemePalette.SWITCH_OFF),p.color(ThemePalette.ACCENT),
+                p.color(ThemePalette.ON_ACCENT),p.color(ThemePalette.FOCUS)));
+        return view;
+    }
     private Spinner themedSpinner(){
         Spinner view=new Spinner(themedContext());view.setPopupBackgroundDrawable(roleShape(ThemePalette.BG,12));
         palette.bind(view,(s,p)->s.setBackgroundTintList(android.content.res.ColorStateList.valueOf(p.color(ThemePalette.MUTED))));return view;
@@ -1111,40 +1412,51 @@ public final class MainActivity extends Activity {
         };
     }
     private ImageButton iconButton(int icon,String description) {
-        ImageButton button=new ImageButton(this);button.setImageDrawable(themedIcon(icon,FG,24));button.setPadding(dp(10),dp(10),dp(10),dp(10));
-        button.setContentDescription(description);button.setBackground(ripple(Color.TRANSPARENT,24));MotionFeedback.attach(button);return button;
+        ImageButton button=new ImageButton(this);button.setImageDrawable(themedIcon(icon,FG,22));button.setPadding(dp(12),dp(12),dp(12),dp(12));
+        button.setContentDescription(description);button.setBackground(themedRipple(shape(BG,14,BORDER),14,false));MotionFeedback.attach(button);return button;
     }
     private Button button(String title,boolean primary) {
-        Button b=new Button(this);b.setText(title);b.setTextSize(13);b.setAllCaps(false);b.setPadding(dp(14),0,dp(14),0);b.setMinHeight(0);b.setMinimumHeight(0);
+        Button b=new Button(this);b.setText(title);b.setTextSize(15);b.setAllCaps(false);
+        b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(dp(48));b.setMinimumHeight(dp(48));
+        b.setPadding(dp(12),dp(8),dp(12),dp(8));
         styleActionButton(b,primary);return b;
     }
     private void styleActionButton(Button b,boolean primary){
         b.setBackgroundTintList(null);
-        b.setAllCaps(false);b.setStateListAnimator(null);b.setElevation(dp(primary?1.5f:1f));
+        b.setAllCaps(false);b.setStateListAnimator(null);b.setElevation(0);
+        b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
         final int[][] enabledStates={new int[]{-android.R.attr.state_enabled},new int[]{}};
-        palette.bind(b,(button,p)->button.setTextColor(new android.content.res.ColorStateList(enabledStates,new int[]{p.color(ThemePalette.MUTED),primary?Color.WHITE:p.color(ThemePalette.FG)})));
+        palette.bind(b,(button,p)->button.setTextColor(new android.content.res.ColorStateList(enabledStates,new int[]{p.color(ThemePalette.MUTED),p.color(primary?ThemePalette.ON_ACCENT:ThemePalette.FG)})));
         android.graphics.drawable.StateListDrawable states=new android.graphics.drawable.StateListDrawable();
-        GradientDrawable disabled=roleShape(ThemePalette.BUTTON_DISABLED,24);int strokeWidth=dp(1);
+        GradientDrawable disabled=roleShape(ThemePalette.BUTTON_DISABLED,14);int strokeWidth=dp(1);
         palette.bind(disabled,(shape,p)->shape.setStroke(strokeWidth,p.color(ThemePalette.BORDER)));
         states.addState(new int[]{-android.R.attr.state_enabled},disabled);
-        GradientDrawable surface=new LiveGradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xff4185fa,0xff3479f2});
-        surface.setCornerRadius(dp(24));surface.setStroke(dp(.6f),primary?0xff3276ed:BORDER);
-        if(!primary)palette.bind(surface,(shape,p)->{shape.setColors(new int[]{p.color(ThemePalette.BUTTON_TOP),p.color(ThemePalette.BUTTON_BOTTOM)});shape.setStroke(strokeWidth,p.color(ThemePalette.BORDER));});
-        states.addState(new int[]{},themedRipple(surface,24,primary));
+        for(boolean focused:new boolean[]{true,false}){
+            GradientDrawable surface=new LiveGradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{ACCENT,CARD});
+            surface.setCornerRadius(dp(14));
+            palette.bind(surface,(shape,p)->{
+                int start=p.color(primary?ThemePalette.ACCENT:ThemePalette.BUTTON_TOP);
+                int end=p.color(primary?ThemePalette.ACCENT_END:ThemePalette.BUTTON_BOTTOM);
+                shape.setColors(new int[]{start,end});
+                shape.setStroke(focused?dp(2):strokeWidth,focused?p.color(ThemePalette.FOCUS):primary?end:p.color(ThemePalette.BORDER));
+            });
+            states.addState(focused?new int[]{android.R.attr.state_focused}:new int[]{},themedRipple(surface,14,primary));
+        }
         b.setBackground(states);MotionFeedback.attach(b);
     }
     private void presentDialog(AlertDialog dialog){
         dialog.show();
         for(int which:new int[]{AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEUTRAL}){
             Button b=dialog.getButton(which);if(b==null||b.getVisibility()!=View.VISIBLE)continue;
-            styleActionButton(b,which==AlertDialog.BUTTON_POSITIVE);b.setTextSize(13);b.setPadding(dp(18),0,dp(18),0);
-            android.view.ViewGroup.LayoutParams raw=b.getLayoutParams();raw.height=dp(44);
+            styleActionButton(b,which==AlertDialog.BUTTON_POSITIVE);b.setTextSize(14);b.setPadding(dp(12),dp(6),dp(12),dp(6));
+            b.setMinHeight(dp(48));b.setMinimumHeight(dp(48));
+            android.view.ViewGroup.LayoutParams raw=b.getLayoutParams();raw.height=ViewGroup.LayoutParams.WRAP_CONTENT;
             if(raw instanceof android.view.ViewGroup.MarginLayoutParams){android.view.ViewGroup.MarginLayoutParams margins=(android.view.ViewGroup.MarginLayoutParams)raw;margins.setMarginStart(dp(5));margins.setMarginEnd(dp(5));}
             b.setLayoutParams(raw);
         }
     }
 
-    private void marginAdd(LinearLayout parent,View child,int top,int bottom) { LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,child instanceof Button?dp(44):-2);p.topMargin=dp(top);p.bottomMargin=dp(bottom);parent.addView(child,p); }
+    private void marginAdd(LinearLayout parent,View child,int top,int bottom) { LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.topMargin=dp(top);p.bottomMargin=dp(bottom);parent.addView(child,p); }
     @Override public void onSaveInstanceState(Bundle state) {
         state.putInt("selected-page",currentPage);if(pendingRuleExport!=null)state.putString("pending-rule-export",pendingRuleExport);super.onSaveInstanceState(state);
     }

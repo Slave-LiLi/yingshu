@@ -27,7 +27,7 @@ public final class ElasticSwitch extends CompoundButton {
     private final RectF rect = new RectF();
     private final PathInterpolator easing = new PathInterpolator(.2f, 0f, 0f, 1f);
     private float density, trackWidth, position, stretch;
-    private int offColor, touchSlop, pointerId = -1;
+    private int offColor, onColor, onThumbColor, focusColor, touchSlop, pointerId = -1;
     private float downX, downY;
     private boolean initialized, armed;
     private ValueAnimator positionAnimator, stretchAnimator;
@@ -36,9 +36,12 @@ public final class ElasticSwitch extends CompoundButton {
     public ElasticSwitch(Context context, AttributeSet attrs) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
-        trackWidth = dp(72);
+        trackWidth = dp(52);
         offColor = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES ? Color.rgb(69,69,74) : Color.rgb(209,209,209);
+        onColor = Color.rgb(0, 95, 112);
+        onThumbColor = Color.WHITE;
+        focusColor = onColor;
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setButtonDrawable((Drawable)null);
         setBackground(null);
@@ -52,7 +55,13 @@ public final class ElasticSwitch extends CompoundButton {
 
     private float dp(float value) { return value * density; }
     private boolean rtl() { return getLayoutDirection() == View.LAYOUT_DIRECTION_RTL; }
-    public void setOffColor(int color){if(offColor!=color){offColor=color;invalidate();}}
+    public void setTrackColors(int off, int on, int onThumb, int focus) {
+        offColor = off;
+        onColor = on;
+        onThumbColor = onThumb;
+        focusColor = focus;
+        invalidate();
+    }
     @Override public int getCompoundPaddingRight() {
         return super.getCompoundPaddingRight() + (initialized && !rtl() ? Math.round(trackWidth + dp(12)) : 0);
     }
@@ -61,19 +70,28 @@ public final class ElasticSwitch extends CompoundButton {
     }
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
         int available = View.MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight();
-        trackWidth = dp(available > 0 && available < dp(260) ? 68 : 72);
+        trackWidth = dp(available > 0 && available < dp(260) ? 48 : 52);
         super.onMeasure(widthSpec, heightSpec);
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float h = dp(32), inset = dp(3), thumbWidth = dp(42);
-        float left = rtl() ? getPaddingLeft() + dp(2) : getWidth() - getPaddingRight() - trackWidth - dp(2);
+        float h = dp(28), inset = dp(4), thumbWidth = dp(20);
+        float left = rtl() ? getPaddingLeft() + dp(4) : getWidth() - getPaddingRight() - trackWidth - dp(4);
         float top = (getHeight() + getPaddingTop() - getPaddingBottom() - h) / 2f;
         float alpha = isEnabled() ? 1f : .42f;
         rect.set(left, top, left + trackWidth, top + h);
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(blend(offColor, Color.rgb(52,121,242), position));
+        if (isFocused() && !isInTouchMode()) {
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(2));
+            paint.setColor(focusColor);
+            rect.inset(-dp(3), -dp(3));
+            canvas.drawRoundRect(rect, h / 2 + dp(3), h / 2 + dp(3), paint);
+            rect.inset(dp(3), dp(3));
+            paint.setStyle(Paint.Style.FILL);
+        }
+        paint.setColor(blend(offColor, onColor, position));
         paint.setAlpha(Math.round(255 * alpha));
         canvas.drawRoundRect(rect, h/2f, h/2f, paint);
 
@@ -92,7 +110,7 @@ public final class ElasticSwitch extends CompoundButton {
             canvas.drawRoundRect(rect,radius+spread,radius+spread,paint);
         }
         rect.set(x1,y1,x2,y2);
-        paint.setColor(Color.WHITE);paint.setAlpha(Math.round(255*alpha));
+        paint.setColor(blend(Color.WHITE, onThumbColor, position));paint.setAlpha(Math.round(255*alpha));
         canvas.drawRoundRect(rect,radius,radius,paint);
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(dp(.55f));
         paint.setColor(Color.rgb(160,164,170));paint.setAlpha(Math.round(90*alpha));

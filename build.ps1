@@ -1,8 +1,8 @@
 ﻿param(
     [string]$ToolsRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) 'android-tools'),
     [string]$JdkRoot = $env:JAVA_HOME,
-    [string]$VersionName = '0.3.13-trial',
-    [int]$VersionCode = 17,
+    [string]$VersionName = '0.3.14-trial',
+    [int]$VersionCode = 18,
     [string]$PythonExe = 'py',
     [string]$SigningKeysRoot = (Join-Path $PSScriptRoot 'keys'),
     [string]$KeystoreName = 'yingshu-local.jks',

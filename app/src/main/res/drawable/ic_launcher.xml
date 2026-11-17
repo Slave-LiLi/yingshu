@@ -1,6 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#112230" android:pathData="M0,0H108V108H0Z" />
-    <path android:fillColor="@android:color/transparent" android:strokeColor="#67E0C4" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M42,29H29V42M66,29H79V42M29,66V79H42M79,66V79H66" />
-    <path android:fillColor="#67E0C4" android:pathData="M48,39L69,54L48,69Z" />
+    <path android:fillColor="#142039" android:strokeColor="#405A76" android:strokeWidth="1.5"
+        android:pathData="M29,2H79Q106,2 106,29V79Q106,106 79,106H29Q2,106 2,79V29Q2,2 29,2Z" />
+    <!-- Keep the facet mesh, orbit inclination, and front arc aligned with SpatialArt.MARK. -->
+    <group android:translateX="54" android:translateY="54" android:scaleX="1.4" android:scaleY="1.4">
+        <group android:rotation="-19">
+            <path android:strokeColor="#969BFFEC" android:strokeWidth="1.6"
+                android:pathData="M-31,0a31,12 0,1 0,62 0a31,12 0,1 0,-62 0" />
+        </group>
+        <path android:fillColor="#C0FBF6" android:pathData="M2,-29L-17,-1L7,-8Z" />
+        <path android:fillColor="#CBC2FF" android:pathData="M2,-29L7,-8L19,-2Z" />
+        <path android:fillColor="#85DFF2" android:pathData="M-17,-1L-4,5L7,-8Z" />
+        <path android:fillColor="#9CA6FD" android:pathData="M-4,5L19,-2L7,-8Z" />
+        <path android:fillColor="#3A689A" android:pathData="M-17,1L-4,7L0,29Z" />
+        <path android:fillColor="#86A9FC" android:pathData="M-4,7L19,0L0,29Z" />
+        <path android:strokeColor="#DCE5F6FF" android:strokeWidth="0.8" android:strokeLineCap="round"
+            android:strokeLineJoin="round" android:pathData="M-17,-1L2,-29L7,-8L19,-2" />
+        <path android:strokeColor="#C89BFFEC" android:strokeWidth="0.65" android:strokeLineCap="round"
+            android:pathData="M-4,7L0,29" />
+        <group android:rotation="-19">
+            <path android:strokeColor="#9BFFEC" android:strokeWidth="1.6" android:strokeLineCap="round"
+                android:pathData="M26.85,6A31,12 0,0 1,-19.09 9.46" />
+        </group>
+    </group>
 </vector>

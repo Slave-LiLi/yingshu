@@ -4,7 +4,6 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
-import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.text.Editable;
 import android.text.InputType;
@@ -33,30 +32,55 @@ public final class SearchableKeyPicker {
 
     public static AlertDialog show(Context context,int currentUsage,int bg,int card,int fg,
                                    int muted,int accent,int border,OnKeySelected listener){
-        LinearLayout body=new LinearLayout(context);body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(context,20),dp(context,10),dp(context,20),0);
+        LinearLayout body = new LinearLayout(context) {
+            @Override protected void onMeasure(int widthSpec, int heightSpec) {
+                int height = dp(context, 524);
+                if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED) {
+                    height = Math.min(height, MeasureSpec.getSize(heightSpec));
+                }
+                super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+            }
+        };
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(context,16),dp(context,8),dp(context,16),dp(context,8));
         body.setFocusableInTouchMode(true);
+        LinearLayout header = new LinearLayout(context);
+        header.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=new TextView(context);title.setText("选择按键");title.setTextColor(fg);title.setTextSize(20);
-        title.setPadding(dp(context,24),dp(context,22),dp(context,24),dp(context,4));
+        title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        if (android.os.Build.VERSION.SDK_INT >= 28) title.setAccessibilityHeading(true);
+        header.addView(title, new LinearLayout.LayoutParams(0,-2,1));
+        Button cancel = new Button(context, null, android.R.attr.borderlessButtonStyle);
+        cancel.setText("取消");cancel.setTextColor(accent);cancel.setAllCaps(false);cancel.setTextSize(15);
+        cancel.setMinHeight(dp(context,48));cancel.setMinWidth(dp(context,64));
+        header.addView(cancel, new LinearLayout.LayoutParams(-2,-2));
+        body.addView(header, new LinearLayout.LayoutParams(-1,-2));
         LinearLayout searchRow=new LinearLayout(context);searchRow.setGravity(Gravity.CENTER_VERTICAL);
         EditText search=new EditText(context);search.setSingleLine(true);search.setTextSize(15);
         search.setTextColor(fg);search.setHintTextColor(muted);search.setHint("搜索，如 F5、空格、Enter");
-        search.setContentDescription("搜索按键");search.setPadding(dp(context,14),0,dp(context,10),0);
-        search.setBackground(surface(context,card,border,16));
+        search.setContentDescription("搜索按键");search.setPadding(dp(context,12),dp(context,6),dp(context,8),dp(context,6));
+        search.setMinHeight(dp(context,48));
+        android.graphics.drawable.StateListDrawable field = new android.graphics.drawable.StateListDrawable();
+        field.addState(new int[]{android.R.attr.state_focused},surface(context,card,accent,12));
+        field.addState(new int[]{},surface(context,card,border,12));
+        search.setBackground(field);
         search.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         search.setImeOptions(EditorInfo.IME_ACTION_SEARCH|EditorInfo.IME_FLAG_NO_EXTRACT_UI);
-        searchRow.addView(search,new LinearLayout.LayoutParams(0,dp(context,48),1));
+        searchRow.addView(search,new LinearLayout.LayoutParams(0,-2,1));
         Button clear=new Button(context);clear.setText("清空");clear.setAllCaps(false);clear.setTextSize(13);
         clear.setTextColor(ColorStateList.valueOf(accent));clear.setContentDescription("清空按键搜索");
-        clear.setBackground(surface(context,card,border,22));clear.setMinWidth(0);clear.setMinimumWidth(0);
-        LinearLayout.LayoutParams clearParams=new LinearLayout.LayoutParams(dp(context,60),dp(context,44));clearParams.leftMargin=dp(context,8);
+        android.graphics.drawable.RippleDrawable clearSurface = new android.graphics.drawable.RippleDrawable(
+                ColorStateList.valueOf((accent & 0x00ffffff) | 0x33000000),surface(context,card,border,12),null);
+        clear.setBackground(clearSurface);clear.setMinWidth(0);clear.setMinimumWidth(0);clear.setMinHeight(dp(context,48));
+        clear.setPadding(dp(context,12),dp(context,6),dp(context,12),dp(context,6));
+        LinearLayout.LayoutParams clearParams=new LinearLayout.LayoutParams(-2,-2);clearParams.setMarginStart(dp(context,8));
         searchRow.addView(clear,clearParams);MotionFeedback.attach(clear);clear.setEnabled(false);
         body.addView(searchRow,new LinearLayout.LayoutParams(-1,-2));
         TextView count=new TextView(context);count.setTextSize(12);count.setTextColor(muted);
         count.setPadding(dp(context,2),dp(context,10),dp(context,2),dp(context,7));
         count.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);body.addView(count);
         FrameLayout results=new FrameLayout(context);
-        LinearLayout.LayoutParams resultParams=new LinearLayout.LayoutParams(-1,dp(context,320));body.addView(results,resultParams);
+        body.addView(results,new LinearLayout.LayoutParams(-1,0,1));
         ListView list=new ListView(context);list.setChoiceMode(ListView.CHOICE_MODE_SINGLE);list.setDividerHeight(0);
         list.setCacheColorHint(bg);list.setBackgroundColor(bg);
         results.addView(list,new FrameLayout.LayoutParams(-1,-1));
@@ -64,9 +88,8 @@ public final class SearchableKeyPicker {
         empty.setText("没有匹配的按键\n试试 F5、空格、Enter 或小键盘");empty.setPadding(dp(context,8),0,dp(context,8),0);
         results.addView(empty,new FrameLayout.LayoutParams(-1,-1));list.setEmptyView(empty);
         KeyAdapter adapter=new KeyAdapter(context,currentUsage,fg,accent);list.setAdapter(adapter);
-        TextView hint=new TextView(context);hint.setText("选中后返回编辑，点“保存”才会生效。修饰键在上一层设置。");
-        hint.setTextSize(11);hint.setTextColor(muted);hint.setPadding(0,dp(context,8),0,0);body.addView(hint);
-        AlertDialog dialog=new AlertDialog.Builder(context).setCustomTitle(title).setView(body).setNegativeButton("取消",null).create();
+        AlertDialog dialog=new AlertDialog.Builder(context).setView(body).create();
+        cancel.setOnClickListener(v -> dialog.dismiss());
         Runnable update=()->{
             // Android may synchronously reconcile checked stable IDs inside notifyDataSetChanged.
             // Remove old positions before publishing a smaller (possibly empty) result set.
@@ -95,11 +118,12 @@ public final class SearchableKeyPicker {
             if(action!=EditorInfo.IME_ACTION_SEARCH)return false;
             hideKeyboard(context,search);return true;
         });
-        Rect visible=new Rect();
-        ViewTreeObserver.OnGlobalLayoutListener layout=()->{
-            body.getWindowVisibleDisplayFrame(visible);
-            int height=Math.min(dp(context,320),Math.max(dp(context,96),visible.height()-dp(context,250)));
-            if(resultParams.height!=height){resultParams.height=height;results.setLayoutParams(resultParams);}
+        ViewTreeObserver.OnGlobalLayoutListener layout = () -> {
+            // A rotated phone or an open keyboard can change the dialog bounds independently.
+            int width = Math.min(dp(context,480),context.getResources().getDisplayMetrics().widthPixels-dp(context,24));
+            if (dialog.getWindow() != null && dialog.getWindow().getAttributes().width != width) {
+                dialog.getWindow().setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+            }
         };
         body.getViewTreeObserver().addOnGlobalLayoutListener(layout);
         dialog.setOnDismissListener(value->{
@@ -107,11 +131,9 @@ public final class SearchableKeyPicker {
             if(body.getViewTreeObserver().isAlive())body.getViewTreeObserver().removeOnGlobalLayoutListener(layout);
         });
         dialog.show();
-        dialog.getWindow().setBackgroundDrawable(surface(context,bg,border,24));
+        dialog.getWindow().setBackgroundDrawable(surface(context,bg,border,18));
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN|WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        int width=Math.min(dp(context,480),context.getResources().getDisplayMetrics().widthPixels-dp(context,28));
-        dialog.getWindow().setLayout(width,WindowManager.LayoutParams.WRAP_CONTENT);
-        Button cancel=dialog.getButton(AlertDialog.BUTTON_NEGATIVE);cancel.setAllCaps(false);cancel.setTextColor(accent);MotionFeedback.attach(cancel);
+        layout.onGlobalLayout();MotionFeedback.attach(cancel);
         body.requestFocus();update.run();return dialog;
     }
 

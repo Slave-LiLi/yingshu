@@ -5,27 +5,27 @@
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:statusBarColor">#FFFFFF</item>
-        <item name="android:navigationBarColor">#FFFFFF</item>
-        <item name="android:windowBackground">#FFFFFF</item>
-        <item name="android:colorBackground">#FFFFFF</item>
-        <item name="android:colorBackgroundFloating">#FFFFFF</item>
-        <item name="android:textColorPrimary">#202123</item>
-        <item name="android:textColorSecondary">#6B6B6B</item>
-        <item name="android:colorAccent">#202123</item>
-        <item name="android:colorControlNormal">#6B6B6B</item>
-        <item name="android:colorControlActivated">#202123</item>
-        <item name="android:colorButtonNormal">#F7F7F8</item>
+        <item name="android:statusBarColor">#EDF3F7</item>
+        <item name="android:navigationBarColor">#EDF3F7</item>
+        <item name="android:windowBackground">#EDF3F7</item>
+        <item name="android:colorBackground">#EDF3F7</item>
+        <item name="android:colorBackgroundFloating">#FCFDFF</item>
+        <item name="android:textColorPrimary">#102438</item>
+        <item name="android:textColorSecondary">#425B70</item>
+        <item name="android:colorAccent">#00686C</item>
+        <item name="android:colorControlNormal">#425B70</item>
+        <item name="android:colorControlActivated">#00686C</item>
+        <item name="android:colorButtonNormal">#EDF4F7</item>
         <item name="android:alertDialogTheme">@style/AppDialogTheme</item>
     </style>
     <style name="AppDialogTheme" parent="android:style/Theme.Material.Light.Dialog.Alert">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#202123</item>
-        <item name="android:colorControlActivated">#202123</item>
-        <item name="android:colorControlNormal">#6B6B6B</item>
-        <item name="android:colorBackground">#FFFFFF</item>
-        <item name="android:colorBackgroundFloating">#FFFFFF</item>
-        <item name="android:textColorPrimary">#202123</item>
-        <item name="android:textColorSecondary">#6B6B6B</item>
+        <item name="android:colorAccent">#00686C</item>
+        <item name="android:colorControlActivated">#00686C</item>
+        <item name="android:colorControlNormal">#425B70</item>
+        <item name="android:colorBackground">#EDF3F7</item>
+        <item name="android:colorBackgroundFloating">#FCFDFF</item>
+        <item name="android:textColorPrimary">#102438</item>
+        <item name="android:textColorSecondary">#425B70</item>
     </style>
 </resources>

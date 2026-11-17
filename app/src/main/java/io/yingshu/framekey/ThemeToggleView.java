@@ -35,17 +35,17 @@ public final class ThemeToggleView extends View {
     private final RectF thumbInset=new RectF(.7f,.7f,47.3f,47.3f);
     private final Path dayEdge=new Path(),nightEdge=new Path();
     private final Shader dayTrack=new LinearGradient(16,10,32,66,
-            new int[]{0xffc9c7c1,0xffe8e6df,0xfff0eee8},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
+            new int[]{0xff94b1c5,0xffcde3ef,0xffeaf4fa},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
     private final Shader nightTrack=new LinearGradient(16,10,24,66,
-            new int[]{0xff08090e,0xff171820,0xff22232b},new float[]{0,.4f,1},Shader.TileMode.CLAMP);
+            new int[]{0xff061021,0xff132638,0xff1d364a},new float[]{0,.4f,1},Shader.TileMode.CLAMP);
     private final Shader dayGlass=new LinearGradient(0,0,14,48,
-            new int[]{0xfff4d376,0xffeee5ca,0xfff6f4ef},new float[]{0,.33f,1},Shader.TileMode.CLAMP);
+            new int[]{0xffa9f1ee,0xffd7f5f5,0xfff0fcff},new float[]{0,.33f,1},Shader.TileMode.CLAMP);
     private final Shader nightGlass=new LinearGradient(0,0,40,48,
-            new int[]{0xff4f5163,0xff292c3b,0xff222334},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
+            new int[]{0xff54588b,0xff273b60,0xff16243c},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
     private final Shader glassBorder=new LinearGradient(0,0,48,48,
             new int[]{0xbfffffff,0x26ffffff,0x71ffffff},new float[]{0,.55f,1},Shader.TileMode.CLAMP);
     private final Shader warmHalo=new RadialGradient(25,5,39,
-            new int[]{0x9affb928,0x46ffba29,0x00ffb928},new float[]{0,.3f,1},Shader.TileMode.CLAMP);
+            new int[]{0x9a52dad3,0x4652dad3,0x0052dad3},new float[]{0,.3f,1},Shader.TileMode.CLAMP);
     private final Shader coolHalo=new RadialGradient(9,40,38,
             new int[]{0x9a7779ff,0x506a6fff,0x006a6fff},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
     private final float[] sunX=new float[289],sunY=new float[289],moonX=new float[289],moonY=new float[289];
@@ -137,11 +137,11 @@ public final class ThemeToggleView extends View {
         fill(canvas,thumb,14,dayGlass,1-shade);fill(canvas,thumb,14,nightGlass,shade);
         paint.setStyle(Paint.Style.STROKE);paint.setShader(glassBorder);paint.setAlpha(255);paint.setStrokeWidth(.7f);
         canvas.drawRoundRect(thumbInset,13.5f,13.5f,paint);paint.setShader(null);paint.setStyle(Paint.Style.FILL);
-        edge(canvas,dayEdge,0xffffbd28,1-shade);edge(canvas,nightEdge,0xff888dff,shade);
+        edge(canvas,dayEdge,0xff53ddd4,1-shade);edge(canvas,nightEdge,0xffa09aff,shade);
         // Absolute progress makes particles follow a slow drag without restarting a timed effect.
         float scatter=(animating||dragging)?(float)Math.sin(Math.PI*shade):0;
-        drawPixels(canvas,sunX,sunY,sunCount,1-shade,scatter,0xff4b4637,11);
-        drawPixels(canvas,moonX,moonY,moonCount,shade,scatter,0xfffaf7e7,37);
+        drawPixels(canvas,sunX,sunY,sunCount,1-shade,scatter,0xff17455c,11);
+        drawPixels(canvas,moonX,moonY,moonCount,shade,scatter,0xffedf9ff,37);
         canvas.restoreToCount(save);
     }
 
