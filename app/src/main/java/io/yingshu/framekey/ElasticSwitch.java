@@ -6,9 +6,8 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.RectF;
+import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.util.AttributeSet;
@@ -20,30 +19,50 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.animation.PathInterpolator;
 import android.widget.CompoundButton;
 
-/** A checkable capsule with a visual-only stretch before its single click action. */
+/** A labeled binary switch. The drawing follows the checked state owned by CompoundButton. */
 public final class ElasticSwitch extends CompoundButton {
-    private static final long PRESS_MS = 140, RELEASE_MS = 240;
+    private static final long PRESS_MS = 110, RELEASE_MS = 200;
+    private static final float HEIGHT = 30, THUMB = 22, INSET = (HEIGHT - THUMB) / 2;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF rect = new RectF();
+    private final Path thumb = new Path(), mark = new Path();
     private final PathInterpolator easing = new PathInterpolator(.2f, 0f, 0f, 1f);
-    private float density, trackWidth, position, stretch;
-    private int offColor, onColor, onThumbColor, focusColor, touchSlop, pointerId = -1;
+    private final ThemePalette palette;
+    private final float density;
+    private float trackWidth = 58, position, stretch;
+    private final int touchSlop;
+    private int pointerId = -1;
     private float downX, downY;
     private boolean initialized, armed;
     private ValueAnimator positionAnimator, stretchAnimator;
 
     public ElasticSwitch(Context context) { this(context, null); }
-    public ElasticSwitch(Context context, AttributeSet attrs) {
+
+    public ElasticSwitch(Context context, AttributeSet attrs) { this(context, attrs, null); }
+
+    ElasticSwitch(Context context, AttributeSet attrs, ThemePalette sharedPalette) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
-        trackWidth = dp(52);
-        offColor = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
-                == Configuration.UI_MODE_NIGHT_YES ? Color.rgb(69,69,74) : Color.rgb(209,209,209);
-        onColor = Color.rgb(0, 95, 112);
-        onThumbColor = Color.WHITE;
-        focusColor = onColor;
+        palette = sharedPalette == null ? new ThemePalette() : sharedPalette;
+        if (sharedPalette == null) {
+            boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                    == Configuration.UI_MODE_NIGHT_YES;
+            palette.setProgress(night ? 1 : 0);
+        }
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        // The single chamfer repeats the keycap silhouette used in the navigation drawer.
+        thumb.moveTo(5, 0);
+        thumb.lineTo(16, 0);
+        thumb.lineTo(THUMB, 6);
+        thumb.lineTo(THUMB, 17);
+        thumb.quadTo(THUMB, THUMB, 17, THUMB);
+        thumb.lineTo(5, THUMB);
+        thumb.quadTo(0, THUMB, 0, 17);
+        thumb.lineTo(0, 5);
+        thumb.quadTo(0, 0, 5, 0);
+        thumb.close();
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-        setButtonDrawable((Drawable)null);
+        setButtonDrawable((Drawable) null);
         setBackground(null);
         setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         setMinHeight(Math.round(dp(48)));
@@ -51,78 +70,83 @@ public final class ElasticSwitch extends CompoundButton {
         setClickable(true);
         position = isChecked() ? 1f : 0f;
         initialized = true;
+        palette.bind(this, (control, theme) -> control.invalidate());
     }
 
     private float dp(float value) { return value * density; }
     private boolean rtl() { return getLayoutDirection() == View.LAYOUT_DIRECTION_RTL; }
-    public void setTrackColors(int off, int on, int onThumb, int focus) {
-        offColor = off;
-        onColor = on;
-        onThumbColor = onThumb;
-        focusColor = focus;
-        invalidate();
-    }
+
     @Override public int getCompoundPaddingRight() {
-        return super.getCompoundPaddingRight() + (initialized && !rtl() ? Math.round(trackWidth + dp(12)) : 0);
+        return super.getCompoundPaddingRight() + (initialized && !rtl() ? Math.round(dp(trackWidth + 16)) : 0);
     }
+
     @Override public int getCompoundPaddingLeft() {
-        return super.getCompoundPaddingLeft() + (initialized && rtl() ? Math.round(trackWidth + dp(12)) : 0);
+        return super.getCompoundPaddingLeft() + (initialized && rtl() ? Math.round(dp(trackWidth + 16)) : 0);
     }
+
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
         int available = View.MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight();
-        trackWidth = dp(available > 0 && available < dp(260) ? 48 : 52);
+        trackWidth = available > 0 && available < dp(260) ? 52 : 58;
         super.onMeasure(widthSpec, heightSpec);
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float h = dp(28), inset = dp(4), thumbWidth = dp(20);
-        float left = rtl() ? getPaddingLeft() + dp(4) : getWidth() - getPaddingRight() - trackWidth - dp(4);
-        float top = (getHeight() + getPaddingTop() - getPaddingBottom() - h) / 2f;
-        float alpha = isEnabled() ? 1f : .42f;
-        rect.set(left, top, left + trackWidth, top + h);
-        paint.setStyle(Paint.Style.FILL);
-        if (isFocused() && !isInTouchMode()) {
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(dp(2));
-            paint.setColor(focusColor);
-            rect.inset(-dp(3), -dp(3));
-            canvas.drawRoundRect(rect, h / 2 + dp(3), h / 2 + dp(3), paint);
-            rect.inset(dp(3), dp(3));
-            paint.setStyle(Paint.Style.FILL);
-        }
-        paint.setColor(blend(offColor, onColor, position));
-        paint.setAlpha(Math.round(255 * alpha));
-        canvas.drawRoundRect(rect, h/2f, h/2f, paint);
+        float left = rtl() ? getPaddingLeft() + dp(5) : getWidth() - getPaddingRight() - dp(trackWidth + 5);
+        float top = (getHeight() + getPaddingTop() - getPaddingBottom() - dp(HEIGHT)) / 2;
+        int save = canvas.save();
+        canvas.translate(left, top);
+        canvas.scale(density, density);
 
-        float visualPosition = rtl() ? 1f-position : position;
-        float x = left + inset + (trackWidth - inset*2 - thumbWidth) * visualPosition;
-        float extra = thumbWidth * .22f * Math.abs(stretch);
-        // Signed extension avoids a discontinuity when checked changes or a tap reverses.
-        float x1 = x - (stretch < 0 ? extra : 0), x2 = x + thumbWidth + (stretch > 0 ? extra : 0);
-        float y1 = top + inset, y2 = top + h - inset, radius = (h - inset*2)/2f;
-        // Layered translucent capsules keep the soft shadow hardware accelerated on API26+.
-        paint.setColor(Color.BLACK);
-        for (int ring=3; ring>=1; ring--) {
-            float spread=dp(ring*.6f), dy=dp(1.2f);
-            paint.setAlpha(Math.round((ring==3?4:ring==2?7:10)*alpha));
-            rect.set(x1-spread,y1-spread+dy,x2+spread,y2+spread+dy);
-            canvas.drawRoundRect(rect,radius+spread,radius+spread,paint);
+        int neutral = palette.color(ThemePalette.MUTED);
+        int accent = palette.color(ThemePalette.ACCENT_TEXT);
+        int fill = ThemePalette.blend(palette.color(ThemePalette.BG), palette.color(ThemePalette.SELECTED), position);
+        int ink = ThemePalette.blend(neutral, accent, position);
+        int edge = ThemePalette.blend(palette.color(ThemePalette.SWITCH_OFF), accent, position);
+        if (isFocused() && !isInTouchMode()) {
+            stroke(palette.color(ThemePalette.FOCUS), 2);
+            canvas.drawRoundRect(-3, -3, trackWidth + 3, HEIGHT + 3, 13, 13, paint);
         }
-        rect.set(x1,y1,x2,y2);
-        paint.setColor(blend(Color.WHITE, onThumbColor, position));paint.setAlpha(Math.round(255*alpha));
-        canvas.drawRoundRect(rect,radius,radius,paint);
-        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(dp(.55f));
-        paint.setColor(Color.rgb(160,164,170));paint.setAlpha(Math.round(90*alpha));
-        canvas.drawRoundRect(rect,radius,radius,paint);
-        paint.setStyle(Paint.Style.FILL);paint.setAlpha(255);
+        fill(fill);
+        canvas.drawRoundRect(0, 0, trackWidth, HEIGHT, 10, 10, paint);
+        stroke(edge, isPressed() ? 1.8f : 1.2f);
+        canvas.drawRoundRect(.7f, .7f, trackWidth - .7f, HEIGHT - .7f, 9.3f, 9.3f, paint);
+
+        // The exposed end of the slot shows how far the slider travels.
+        float start = INSET + THUMB / 2, end = trackWidth - start, midY = HEIGHT / 2;
+        stroke(ThemePalette.blend(fill, ink, .65f), 1.4f);
+        canvas.drawLine(start, midY, end, midY, paint);
+        canvas.drawLine(start, midY - 2, start, midY + 2, paint);
+        canvas.drawLine(end, midY - 2, end, midY + 2, paint);
+
+        float visual = rtl() ? 1 - position : position;
+        float x = INSET + (trackWidth - THUMB - 2 * INSET) * visual;
+        float x1 = Math.max(INSET, x + Math.min(0, stretch) * 2.6f);
+        float x2 = Math.min(trackWidth - INSET, x + THUMB + Math.max(0, stretch) * 2.6f);
+        canvas.translate(x1, INSET);
+        canvas.scale((x2 - x1) / THUMB, 1);
+        fill(ink);
+        canvas.drawPath(thumb, paint);
+        stroke(palette.color(ThemePalette.CARD), 1.95f);
+        // Morph a dash into a tick in the slider's own coordinates, including in RTL.
+        mark.rewind();
+        mark.moveTo(6.2f, 11 - .4f * position);
+        mark.lineTo(10.2f, 11 + 3 * position);
+        mark.lineTo(15.9f, 11 - 3.5f * position);
+        canvas.drawPath(mark, paint);
+        canvas.restoreToCount(save);
     }
 
-    private static int blend(int a, int b, float fraction) {
-        float f=Math.max(0,Math.min(1,fraction));
-        return Color.rgb(Math.round(Color.red(a)+(Color.red(b)-Color.red(a))*f),
-                Math.round(Color.green(a)+(Color.green(b)-Color.green(a))*f),
-                Math.round(Color.blue(a)+(Color.blue(b)-Color.blue(a))*f));
+    private void fill(int color) {
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(color);
+        if (!isEnabled()) paint.setAlpha(105);
+    }
+
+    private void stroke(int color, float width) {
+        fill(color);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(width);
     }
     private boolean animateAllowed() {
         return initialized && isAttachedToWindow() && isLaidOut() && isShown() && ValueAnimator.areAnimatorsEnabled();

@@ -1470,9 +1470,8 @@ public final class MainActivity extends Activity {
     }
     private UiIcon themedIcon(int kind,int color,int size){UiIcon icon=new UiIcon(kind,color,dp(size));ThemePalette.Ref ref=palette.ref(color);palette.bind(icon,(i,p)->i.setColor(ref.color(p)));return icon;}
     private ElasticSwitch themedSwitch(){
-        ElasticSwitch view=new ElasticSwitch(this);themeText(view,FG);
-        palette.bind(view,(s,p)->s.setTrackColors(p.color(ThemePalette.SWITCH_OFF),p.color(ThemePalette.ACCENT),
-                p.color(ThemePalette.ON_ACCENT),p.color(ThemePalette.FOCUS)));
+        ElasticSwitch view=new ElasticSwitch(this,null,palette);
+        themeText(view,FG);
         return view;
     }
     private Spinner themedSpinner(){
