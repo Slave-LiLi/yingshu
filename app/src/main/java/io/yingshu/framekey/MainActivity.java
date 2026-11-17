@@ -64,21 +64,19 @@ public final class MainActivity extends Activity {
     private final ThemePalette palette=new ThemePalette();
     private ThemeToggleView themeToggle;
     private TextView appearanceLabel;
-    private final ValueAnimator[] navigationAnimations=new ValueAnimator[5];
-    private final float[] navigationSelection=new float[5];
-    private final GradientDrawable[] navigationFills=new GradientDrawable[5];
     private final PathInterpolator motionEase=new PathInterpolator(.2f,0,0,1);
     private int appearanceMode;
     private static final String[] APPEARANCE_NAMES={"跟随系统（默认）","浅色","深色"};
     private static final int REQUEST_BLE = 101, REQUEST_CAMERA = 102;
     private static final int REQUEST_EXPORT = 103, REQUEST_ENABLE_BT = 104;
     private static final int PAGE_HOME=0, PAGE_KEYS=1, PAGE_DEVICES=2, PAGE_SOURCES=3, PAGE_SETTINGS=4;
-    private static final String[] PAGE_TITLES={"识别","自定义按键","设备连接","视频源","设置与诊断"};
+    private static final String[] PAGE_TITLES={"识别工作台","自定义按键","设备连接","视频源","设置与诊断"};
     private final ScrollView[] pages=new ScrollView[PAGE_TITLES.length];
-    private final LinearLayout[] navigationRows=new LinearLayout[PAGE_TITLES.length];
+    private final NavigationItem[] navigationRows=new NavigationItem[PAGE_TITLES.length];
     private FrameLayout appRoot, pageHost;
     private LinearLayout appBody, drawerPanel;
     private View drawerScrim;
+    private ImageButton drawerClose;
     private TextView pageTitle;
     private TextView sourceTag;
     private ImageButton menuButton;
@@ -182,6 +180,7 @@ public final class MainActivity extends Activity {
             @Override public void onState(String p, String detail) {
                 if (destroyed) return;
                 phase = p;
+                refreshDrawerStatus();
                 if (!"READY".equals(p)) ruleGate.reset();
                 bleState.setText(stateName(p));
                 themeText(bleState,"READY".equals(p) ? ACCENT : ("ERROR".equals(p) ? WARN : FG));
@@ -299,7 +298,7 @@ public final class MainActivity extends Activity {
         appBody=vertical();appRoot.addView(appBody,new FrameLayout.LayoutParams(-1,-1));
         LinearLayout top=horizontal();top.setPadding(dp(12),dp(6),dp(16),dp(6));
         top.setBackground(roleShape(ThemePalette.CARD,0));
-        menuButton=iconButton(UiIcon.MENU,"打开导航菜单");menuButton.setOnClickListener(v->setDrawerOpen(true));
+        menuButton=navigationButton(NavigationGlyph.MENU,"打开导航菜单");menuButton.setOnClickListener(v->setDrawerOpen(true));
         top.addView(menuButton,new LinearLayout.LayoutParams(dp(48),dp(48)));
         pageTitle=text(PAGE_TITLES[currentPage],20,FG,true);
         LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1);titleParams.setMarginStart(dp(12));
@@ -335,112 +334,181 @@ public final class MainActivity extends Activity {
     }
 
     private void makeDrawer() {
-        drawerScrim=new View(this);drawerScrim.setBackgroundColor(Color.argb(120,0,0,0));
-        drawerScrim.setContentDescription("关闭导航菜单");drawerScrim.setOnClickListener(v->setDrawerOpen(false));
-        appRoot.addView(drawerScrim,new FrameLayout.LayoutParams(-1,-1));
-        drawerPanel=vertical();drawerPanel.setBackground(shape(DRAWER,0,0));drawerPanel.setElevation(dp(12));
-        drawerPanel.setPadding(dp(16),dp(8),dp(16),dp(16));drawerPanel.setClickable(true);
-        int width=drawerWidth(getResources().getDisplayMetrics().widthPixels);
-        FrameLayout.LayoutParams drawerParams=new FrameLayout.LayoutParams(width,-1,Gravity.LEFT);
-        appRoot.addView(drawerPanel,drawerParams);
-        appRoot.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
-            int resized=drawerWidth(r-l-v.getPaddingLeft()-v.getPaddingRight());
-            if(drawerParams.width!=resized){drawerParams.width=resized;drawerPanel.setLayoutParams(drawerParams);}
+        drawerScrim = new View(this);
+        drawerScrim.setBackgroundColor(Color.argb(126, 4, 12, 24));
+        drawerScrim.setOnClickListener(v -> setDrawerOpen(false));
+        drawerScrim.setFocusable(false);
+        drawerScrim.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        appRoot.addView(drawerScrim, new FrameLayout.LayoutParams(-1, -1));
+
+        drawerPanel = vertical();
+        drawerPanel.setBackground(shape(DRAWER, 22, BORDER));
+        drawerPanel.setClipToOutline(true);
+        drawerPanel.setElevation(dp(12));
+        drawerPanel.setClickable(true);
+        drawerPanel.setFocusable(false);
+        if (Build.VERSION.SDK_INT >= 28) drawerPanel.setAccessibilityPaneTitle("导航菜单");
+        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
+                drawerWidth(getResources().getDisplayMetrics().widthPixels), -1, Gravity.LEFT);
+        panelParams.setMargins(dp(8), dp(8), 0, dp(8));
+        appRoot.addView(drawerPanel, panelParams);
+        appRoot.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int width = drawerWidth(r - l - v.getPaddingLeft() - v.getPaddingRight());
+            if (panelParams.width != width) {
+                panelParams.width = width;
+                drawerPanel.setLayoutParams(panelParams);
+            }
         });
-        LinearLayout heading=horizontal();heading.setPadding(dp(4),0,0,dp(8));
-        LinearLayout.LayoutParams drawerMarkParams=new LinearLayout.LayoutParams(dp(42),dp(42));
-        drawerMarkParams.setMarginEnd(dp(8));
-        heading.addView(new SpatialArt(this,palette,SpatialArt.Mode.MARK),drawerMarkParams);
-        heading.addView(text("映枢",22,FG,true),new LinearLayout.LayoutParams(0,-2,1));
-        ImageButton close=iconButton(UiIcon.CLOSE,"关闭导航菜单");close.setOnClickListener(v->setDrawerOpen(false));
-        heading.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));drawerPanel.addView(heading);
-        ScrollView navigation=new ScrollView(this);navigation.setFillViewport(false);navigation.setVerticalScrollBarEnabled(false);
-        LinearLayout items=vertical();navigation.addView(items);drawerPanel.addView(navigation,new LinearLayout.LayoutParams(-1,0,1));
-        SpatialArt banner=new SpatialArt(this,palette,SpatialArt.Mode.BANNER);
-        banner.setBackground(roleShape(ThemePalette.PREVIEW,16));banner.setClipToOutline(true);
-        LinearLayout.LayoutParams bannerParams=new LinearLayout.LayoutParams(-1,dp(72));
-        bannerParams.bottomMargin=dp(16);items.addView(banner,bannerParams);
-        int[] icons={UiIcon.RECOGNIZE,UiIcon.KEYBOARD,UiIcon.DEVICE,UiIcon.VIDEO,UiIcon.SETTINGS};
-        for(int i=0;i<PAGE_TITLES.length;i++){
-            final int destination=i;LinearLayout row=horizontal();navigationRows[i]=row;
-            row.setPadding(dp(14),dp(13),dp(12),dp(13));row.setMinimumHeight(dp(52));
-            ImageView icon=new ImageView(this);icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            icon.setImageDrawable(themedIcon(icons[i],ACCENT,22));
-            row.addView(icon,new LinearLayout.LayoutParams(dp(22),dp(22)));
-            TextView title=text(PAGE_TITLES[i],15,FG,false);LinearLayout.LayoutParams labelParams=new LinearLayout.LayoutParams(0,-2,1);labelParams.leftMargin=dp(14);
-            row.addView(title,labelParams);
-            View indicator=new View(this);indicator.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            indicator.setBackground(roleShape(ThemePalette.ACCENT_TEXT,2));row.addView(indicator,new LinearLayout.LayoutParams(dp(4),dp(18)));
-            row.setFocusable(true);row.setOnClickListener(v->showPage(destination));MotionFeedback.attach(row);
-            LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.bottomMargin=dp(4);items.addView(row,rp);
-        }
-        TextView version=text("v0.3.14  /  模型 v6",13,MUTED,false);
-        version.setTypeface(Typeface.MONOSPACE);version.setPadding(dp(12),dp(12),dp(12),0);drawerPanel.addView(version);
+
+        LinearLayout header = horizontal();
+        header.setPadding(dp(16), dp(12), dp(10), dp(12));
+        header.addView(new NavigationEmblem(this, palette), new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout identity = vertical();
+        identity.addView(text("映枢", 23, FG, true));
+        TextView build = text("v0.3.14 · 模型 v6", 12, MUTED, false);
+        build.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+        identity.addView(build);
+        LinearLayout.LayoutParams brand = new LinearLayout.LayoutParams(0, -2, 1);
+        brand.setMarginStart(dp(12));
+        header.addView(identity, brand);
+        drawerClose = navigationButton(NavigationGlyph.CLOSE, "关闭导航菜单");
+        drawerClose.setOnClickListener(v -> setDrawerOpen(false));
+        header.addView(drawerClose, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        drawerPanel.addView(header);
+        View seam = new View(this);
+        seam.setBackground(roleShape(ThemePalette.BORDER, 0));
+        drawerPanel.addView(seam, new LinearLayout.LayoutParams(-1, dp(1)));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setFocusable(false);
+        scroll.setVerticalScrollBarEnabled(false);
+        LinearLayout list = vertical();
+        list.setPadding(dp(12), 0, dp(12), dp(10));
+        scroll.addView(list, new ScrollView.LayoutParams(-1, -2));
+        drawerPanel.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        addNavigationHeading(list, "工作空间");
+        addNavigationItem(list, PAGE_HOME);
+        addNavigationItem(list, PAGE_KEYS);
+        addNavigationHeading(list, "连接");
+        addNavigationItem(list, PAGE_DEVICES);
+        addNavigationItem(list, PAGE_SOURCES);
+
+        // Pin settings on tall screens and keep it in the same scroll path on short screens.
+        android.widget.Space remaining = new android.widget.Space(this);
+        list.addView(remaining, new LinearLayout.LayoutParams(-1, 0, 1));
+        View divider = new View(this);
+        divider.setBackground(roleShape(ThemePalette.BORDER, 0));
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(-1, dp(1));
+        dividerParams.setMargins(dp(8), dp(12), dp(8), dp(8));
+        list.addView(divider, dividerParams);
+        addNavigationItem(list, PAGE_SETTINGS);
         setDrawerOpen(false);
     }
 
+    private void addNavigationHeading(LinearLayout parent, String name) {
+        TextView heading = text(name, 13, MUTED, true);
+        heading.setPadding(dp(12), dp(14), dp(8), dp(4));
+        if (Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
+        parent.addView(heading);
+    }
+
+    private void addNavigationItem(LinearLayout parent, int page) {
+        NavigationItem item = new NavigationItem(this, palette, page, PAGE_TITLES[page]);
+        navigationRows[page] = item;
+        item.setOnClickListener(v -> showPage(page));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(4);
+        parent.addView(item, params);
+    }
+
     private int drawerWidth(int available) {
-        return Math.min(dp(328),Math.max(dp(160),available-dp(48)));
+        return Math.min(dp(352), Math.max(dp(160), available - dp(50)));
+    }
+
+    private void refreshDrawerStatus() {
+        if (!drawerOpen) return;
+        navigationRows[PAGE_HOME].setDetail(videoLive ? "正在接收画面" : captureRequested ? "等待视频画面" : "未开始接收");
+        navigationRows[PAGE_KEYS].setDetail("已分配 " + assignedRuleCount() + " / " + ruleBook.rules.length + " 项");
+        navigationRows[PAGE_DEVICES].setDetail("M3 · " + stateName(phase));
+        navigationRows[PAGE_SOURCES].setDetail(videoMode == 0 ? "USB 采集卡" : "NDI 网络视频");
     }
 
     /** Navigation changes visibility only; video and inference retain their existing owners. */
     private void showPage(int index) {
-        if(index<0||index>=pages.length||destroyed||isFinishing())return;
-        if(index==PAGE_KEYS&&!keyQuestionAccepted()){setDrawerOpen(false);showKeysQuestion();return;}
-        int previous=currentPage;currentPage=index;
-        for(int i=0;i<pages.length;i++){
-            pages[i].animate().cancel();pages[i].setAlpha(1);pages[i].setTranslationY(0);
-            pages[i].setVisibility(i==index?View.VISIBLE:View.GONE);
-            if(navigationRows[i]!=null){
-                navigationRows[i].setSelected(i==index);animateNavigationSelection(i,i==index?1f:0f);
-                navigationRows[i].getChildAt(navigationRows[i].getChildCount()-1).setVisibility(i==index?View.VISIBLE:View.INVISIBLE);
-                navigationRows[i].setContentDescription(PAGE_TITLES[i]+(i==index?"，当前页面":""));
-            }
+        if (index < 0 || index >= pages.length || destroyed || isFinishing()) return;
+        if (index == PAGE_KEYS && !keyQuestionAccepted()) {
+            setDrawerOpen(false);
+            showKeysQuestion();
+            return;
         }
-        pageTitle.setText(index==PAGE_HOME?"识别工作台":PAGE_TITLES[index]);setDrawerOpen(false);
-        if(previous!=index&&pageHost.isLaidOut()&&ValueAnimator.areAnimatorsEnabled()){
-            pages[index].setAlpha(.25f);pages[index].setTranslationY(dp(7));
+        int previous = currentPage;
+        currentPage = index;
+        boolean animate = pageHost.isLaidOut() && ValueAnimator.areAnimatorsEnabled();
+        for (int i = 0; i < pages.length; i++) {
+            pages[i].animate().cancel();
+            pages[i].setAlpha(1);
+            pages[i].setTranslationY(0);
+            pages[i].setVisibility(i == index ? View.VISIBLE : View.GONE);
+            navigationRows[i].setCurrent(i == index, animate && drawerOpen, motionEase);
+        }
+        pageTitle.setText(PAGE_TITLES[index]);
+        setDrawerOpen(false);
+        if (previous != index && animate) {
+            pages[index].setAlpha(.25f);
+            pages[index].setTranslationY(dp(7));
             pages[index].animate().alpha(1f).translationY(0).setDuration(220).setInterpolator(motionEase).start();
         }
     }
-    private void animateNavigationSelection(int index,float target){
-        if(navigationAnimations[index]!=null){navigationAnimations[index].cancel();navigationAnimations[index]=null;}
-        if(!drawerOpen||!appRoot.isLaidOut()||!ValueAnimator.areAnimatorsEnabled()){
-            navigationSelection[index]=target;paintNavigationSelection(index);return;
-        }
-        ValueAnimator animator=ValueAnimator.ofFloat(navigationSelection[index],target);navigationAnimations[index]=animator;
-        animator.setDuration(180);animator.setInterpolator(motionEase);
-        animator.addUpdateListener(value->{navigationSelection[index]=(Float)value.getAnimatedValue();paintNavigationSelection(index);});animator.start();
-    }
-    private void paintNavigationSelection(int index){
-        if(navigationFills[index]==null){
-            navigationFills[index]=roleShape(ThemePalette.SELECTED,14);
-            navigationRows[index].setBackground(themedRipple(navigationFills[index],14,false));
-        }
-        navigationFills[index].setAlpha(Math.round(255*navigationSelection[index]));
-    }
+
     private void setDrawerOpen(boolean open) {
-        boolean wasOpen=drawerOpen;drawerOpen=open;
-        if(drawerPanel==null)return;
-        drawerPanel.animate().cancel();drawerScrim.animate().cancel();
-        boolean animate=appRoot.isLaidOut()&&ValueAnimator.areAnimatorsEnabled();
-        int drawerWidth=Math.max(drawerPanel.getWidth(),drawerPanel.getLayoutParams().width);
-        if(open){
-            if(drawerPanel.getVisibility()!=View.VISIBLE){drawerPanel.setTranslationX(-drawerWidth);drawerScrim.setAlpha(0);}
-            drawerPanel.setVisibility(View.VISIBLE);drawerScrim.setVisibility(View.VISIBLE);
-            if(animate){
-                drawerPanel.animate().translationX(0).setDuration(280).setInterpolator(motionEase).start();
-                drawerScrim.animate().alpha(1).setDuration(220).start();
-            }else{drawerPanel.setTranslationX(0);drawerScrim.setAlpha(1);}
-        }else if(animate&&(wasOpen||drawerPanel.getVisibility()==View.VISIBLE)){
-            drawerPanel.animate().translationX(-drawerWidth).setDuration(230).setInterpolator(motionEase)
-                .withEndAction(()->{if(!drawerOpen){drawerPanel.setVisibility(View.GONE);drawerScrim.setVisibility(View.GONE);}}).start();
-            drawerScrim.animate().alpha(0).setDuration(200).start();
-        }else{drawerPanel.setVisibility(View.GONE);drawerScrim.setVisibility(View.GONE);drawerPanel.setTranslationX(0);drawerScrim.setAlpha(0);}
-        appBody.setImportantForAccessibility(open?View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
-        appBody.setDescendantFocusability(open?ViewGroup.FOCUS_BLOCK_DESCENDANTS:ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        if(open){drawerPanel.setFocusableInTouchMode(true);drawerPanel.requestFocus();}
-        else if(menuButton!=null)menuButton.requestFocus();
+        boolean wasOpen = drawerOpen;
+        drawerOpen = open;
+        drawerPanel.animate().cancel();
+        drawerScrim.animate().cancel();
+        boolean animate = appRoot.isLaidOut() && ValueAnimator.areAnimatorsEnabled();
+        int travel = Math.max(drawerPanel.getWidth(), drawerPanel.getLayoutParams().width) + dp(10);
+        appBody.setImportantForAccessibility(open ? View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS : View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+        appBody.setDescendantFocusability(open ? ViewGroup.FOCUS_BLOCK_DESCENDANTS : ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        drawerPanel.setImportantForAccessibility(open ? View.IMPORTANT_FOR_ACCESSIBILITY_YES : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        drawerPanel.setDescendantFocusability(open ? ViewGroup.FOCUS_AFTER_DESCENDANTS : ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        if (open) {
+            refreshDrawerStatus();
+            if (drawerPanel.getVisibility() != View.VISIBLE) {
+                drawerPanel.setTranslationX(-travel);
+                drawerScrim.setAlpha(0);
+            }
+            drawerPanel.setVisibility(View.VISIBLE);
+            drawerScrim.setVisibility(View.VISIBLE);
+            if (animate) {
+                drawerPanel.animate().translationX(0).setDuration(260).setInterpolator(motionEase).start();
+                drawerScrim.animate().alpha(1).setDuration(200).start();
+            } else {
+                drawerPanel.setTranslationX(0);
+                drawerScrim.setAlpha(1);
+            }
+            if (!drawerPanel.isInTouchMode()) navigationRows[currentPage].requestFocus();
+            NavigationItem active = navigationRows[currentPage];
+            active.post(() -> {
+                if (drawerOpen && active.isSelected()) active.requestRectangleOnScreen(
+                        new android.graphics.Rect(0, 0, active.getWidth(), active.getHeight()), true);
+            });
+        } else {
+            if (animate && wasOpen) {
+                drawerPanel.animate().translationX(-travel).setDuration(190).setInterpolator(motionEase)
+                        .withEndAction(() -> {
+                            if (!drawerOpen) {
+                                drawerPanel.setVisibility(View.GONE);
+                                drawerScrim.setVisibility(View.GONE);
+                            }
+                        }).start();
+                drawerScrim.animate().alpha(0).setDuration(160).start();
+            } else {
+                drawerPanel.setVisibility(View.GONE);
+                drawerScrim.setVisibility(View.GONE);
+            }
+            if (wasOpen && !menuButton.isInTouchMode()) menuButton.requestFocus();
+        }
     }
 
     private void makeHomePage(LinearLayout content) {
@@ -952,8 +1020,14 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private int assignedRuleCount() {
+        int assigned = 0;
+        for (RuleBook.Rule rule : ruleBook.rules) if (rule.usage != 0) assigned++;
+        return assigned;
+    }
+
     private String idleOutputStatus() {
-        int assigned=0;for(RuleBook.Rule rule:ruleBook.rules)if(rule.usage!=0)assigned++;
+        int assigned=assignedRuleCount();
         String configured=assigned==0?"输出键均未分配":"已配置 "+assigned+"/"+ruleBook.rules.length+" 项";
         if(!recognitionSwitch.isChecked())return configured+" · 识别已关闭，不发键";
         if(!outputSwitch.isChecked())return configured+" · 自动输出关闭";
@@ -1001,6 +1075,7 @@ public final class MainActivity extends Activity {
         // announces RUNNING once. Never gate recovery on the previously stale state.
         if(!videoLive){
             videoLive=true;
+            refreshDrawerStatus();
             String detail="已收到真实 "+(source==0?"USB":"NDI")+" 视频帧："+frame.getWidth()+" × "+frame.getHeight();
             lastVideo="RUNNING | "+detail;videoState.setText(detail);themeText(videoState,ACCENT);
         }
@@ -1013,6 +1088,7 @@ public final class MainActivity extends Activity {
         if(destroyed||!captureRequested||videoMode!=1){frame.recycle();return;}
         if(!videoLive){
             videoLive=true;
+            refreshDrawerStatus();
             String detail="已收到真实 NDI 视频帧："+frame.sourceWidth+" × "+frame.sourceHeight;
             lastVideo="RUNNING | "+detail;videoState.setText(detail);themeText(videoState,ACCENT);
         }
@@ -1197,6 +1273,7 @@ public final class MainActivity extends Activity {
         lastVideo=reason;
     }
     private void updateVideoControls() {
+        refreshDrawerStatus();
         boolean hasSource=!displayedSourceIds.isEmpty();
         runVideoButton.setText(captureRequested?"停止接收":hasSource?"开始接收":"选择视频源");
         changeVideoSource.setVisibility(hasSource&&!captureRequested?View.VISIBLE:View.GONE);
@@ -1223,6 +1300,7 @@ public final class MainActivity extends Activity {
             if("WAITING".equals(state))videoPreview.clear("等待发送端画面…");
         } else if(captureRequested)return;
         lastVideo=state+" | "+detail;videoState.setText(detail);themeText(videoState,"RUNNING".equals(state)?ACCENT:("ERROR".equals(state)?WARN:FG));
+        refreshDrawerStatus();
     }
     private void captureStats(int source,String stats) {
         if(destroyed||!captureRequested||source!=videoMode)return;
@@ -1411,9 +1489,26 @@ public final class MainActivity extends Activity {
             @Override public View getDropDownView(int position,View convertView,ViewGroup parent){return colorRow(super.getDropDownView(position,convertView,parent),true);}
         };
     }
-    private ImageButton iconButton(int icon,String description) {
-        ImageButton button=new ImageButton(this);button.setImageDrawable(themedIcon(icon,FG,22));button.setPadding(dp(12),dp(12),dp(12),dp(12));
-        button.setContentDescription(description);button.setBackground(themedRipple(shape(BG,14,BORDER),14,false));MotionFeedback.attach(button);return button;
+    private ImageButton navigationButton(int kind, String description) {
+        ImageButton button = new ImageButton(this);
+        NavigationGlyph glyph = new NavigationGlyph(palette, kind, dp(23));
+        boolean menu = kind == NavigationGlyph.MENU;
+        glyph.setSelection(menu ? 1 : 0);
+        button.setImageDrawable(glyph);
+        button.setScaleType(ImageView.ScaleType.CENTER);
+        button.setContentDescription(description);
+        button.setTooltipText(description);
+        button.setFocusable(true);
+        int radius = menu ? 14 : 24;
+        int fill = menu ? SELECTED : CARD;
+        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+        GradientDrawable focused = roleShape(menu ? ThemePalette.SELECTED : ThemePalette.CARD, radius);
+        palette.bind(focused, (d, p) -> d.setStroke(dp(2), p.color(ThemePalette.FOCUS)));
+        states.addState(new int[]{android.R.attr.state_focused}, themedRipple(focused, radius, false));
+        states.addState(new int[]{}, themedRipple(shape(fill, radius, BORDER), radius, false));
+        button.setBackground(states);
+        MotionFeedback.attach(button);
+        return button;
     }
     private Button button(String title,boolean primary) {
         Button b=new Button(this);b.setText(title);b.setTextSize(15);b.setAllCaps(false);
@@ -1478,6 +1573,5 @@ public final class MainActivity extends Activity {
         palette.clear();
         if(appRoot!=null)appRoot.animate().cancel();
         if(drawerPanel!=null)drawerPanel.animate().cancel();if(drawerScrim!=null)drawerScrim.animate().cancel();
-        for(ValueAnimator animation:navigationAnimations)if(animation!=null)animation.cancel();
         for(ScrollView page:pages)if(page!=null)page.animate().cancel(); ++recognitionDisplayToken;recognitionExpiry.removeCallbacksAndMessages(null);if(modelEngine!=null)modelEngine.close();if(uvc!=null)uvc.close();if(ndi!=null)ndi.close();if(ble!=null)ble.close();if(usb!=null)usb.close();destroyed=true;super.onDestroy(); }
 }
