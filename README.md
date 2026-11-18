@@ -4,9 +4,11 @@ Android 视频接收、游戏 HUD 枪械与倍镜识别，以及可自定义的 
 
 当前源码版本为 **0.3.14-trial**（versionCode 18）。支持 Android 8.0 及以上、arm64-v8a。界面使用原生 Android Java；模型在手机本地通过 ONNX Runtime 推理。
 
-[下载上一版 0.3.13](https://github.com/Slave-LiLi/yingshu/releases/tag/v0.3.13-trial) · [构建说明](docs/BUILD.md) · [模型与训练](docs/MODEL.md)
+[下载 0.3.14 安卓安装包（arm64）](https://github.com/Slave-LiLi/yingshu/releases/download/v0.3.14-trial/Yingshu-0.3.14-trial-arm64.apk) · [发布说明与校验文件](https://github.com/Slave-LiLi/yingshu/releases/tag/v0.3.14-trial) · [构建说明](docs/BUILD.md) · [模型与训练](docs/MODEL.md)
 
 识别工作台的切角外框标出视频区域，普通设置卡片使用细边线。侧栏以短色条和勾号指示当前页，使用键盘时描边会跟随焦点。窄屏上下排列预览和控件，宽屏可并排操作。
+
+![映枢在 Android 15 模拟器上的首页与侧栏](docs/evidence/0.3.14/overview.png)
 
 ## 功能
 
@@ -34,7 +36,7 @@ Android 视频接收、游戏 HUD 枪械与倍镜识别，以及可自定义的 
 
 ## 0.3.13 实测与已知问题
 
-0.3.13 更新为 v6 联合模型。以下数据来自该版的手机测试。荣耀 10 上约 **3.16 次识别/秒**。公开保留 [69 张手机截图的实测说明](docs/evidence/0.3.13/phone-video-test.md) 和 [截图总览](docs/evidence/0.3.13/screenshots.md)；完整截图包在本版 Release。
+0.3.13 更新为 v6 联合模型。以下数据来自该版的手机测试。荣耀 10 上约 **3.16 次识别/秒**。[手机实测说明](docs/evidence/0.3.13/phone-video-test.md) · [截图总览](docs/evidence/0.3.13/screenshots.md) · [下载 0.3.13 的 69 张完整截图](https://github.com/Slave-LiLi/yingshu/releases/tag/v0.3.13-trial)
 
 指定旧录像的 62 个已支持枪械组合测试点中，39 次首次界面读数完整正确、22 次等待新画面、1 次未识别，即时正确显示覆盖率为 **62.9%**。另 7 个克雷贝尔测试点中出现 2 次误认复仇女神。结果显示过期空档与未知枪械误识别**尚未修复**，因此本版仍标记为试用版。以上包含 UI 状态，不是纯模型准确率；同源录像也不代表独立新对局泛化。[完整验证范围](docs/VALIDATION.md) 分别说明不同素材和测试方法。
 
@@ -43,7 +45,7 @@ Android 视频接收、游戏 HUD 枪械与倍镜识别，以及可自定义的 
 - [构建说明](docs/BUILD.md)：依赖准备、自行签名、APK 构建和本地测试。
 - [模型与训练](docs/MODEL.md)：可编辑权重、继续训练、导出和数据范围。
 - [详细功能说明](README.txt)：规则、状态、视频接收与推理契约。
-- [本版验证范围](docs/VALIDATION.md)：本地检查及手机验收的边界。
+- [0.3.14 界面验证](docs/VALIDATION-0.3.14.md) · [0.3.13 模型与手机实测](docs/VALIDATION.md)
 - [第三方组件说明](THIRD-PARTY.md)：模型、NDI 和 ONNX Runtime 的来源与许可。
 
 仓库不包含发布者签名私钥、口令、手机偏好、原始日志或私人录屏。构建脚本不会安装、卸载手机应用，也不会自动生成或覆盖签名证书。
