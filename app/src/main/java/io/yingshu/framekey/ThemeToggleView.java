@@ -20,12 +20,15 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 
+import static io.yingshu.framekey.ThemePalette.darkColor;
+
 /** A bounded, event-driven day/night control. It never owns application theme state. */
 public final class ThemeToggleView extends View {
     public interface OnThemeChangedListener { void onThemeChanged(boolean dark); }
     public interface OnThemeProgressListener { void onThemeProgress(float progress); }
     private static final long SWITCH_MS=550;
     private static final float ART_WIDTH=144f, ART_HEIGHT=76f;
+    private static final int NIGHT_GLOW_RGB = darkColor(ThemePalette.CRYSTAL_BLUE) & 0x00ffffff;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pixels=new Paint();
     private final Paint shadow=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -37,17 +40,21 @@ public final class ThemeToggleView extends View {
     private final Shader dayTrack=new LinearGradient(16,10,32,66,
             new int[]{0xff94b1c5,0xffcde3ef,0xffeaf4fa},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
     private final Shader nightTrack=new LinearGradient(16,10,24,66,
-            new int[]{0xff061021,0xff132638,0xff1d364a},new float[]{0,.4f,1},Shader.TileMode.CLAMP);
+            new int[]{darkColor(ThemePalette.BG), darkColor(ThemePalette.CARD),
+                    darkColor(ThemePalette.SELECTED)},new float[]{0,.4f,1},Shader.TileMode.CLAMP);
     private final Shader dayGlass=new LinearGradient(0,0,14,48,
             new int[]{0xffa9f1ee,0xffd7f5f5,0xfff0fcff},new float[]{0,.33f,1},Shader.TileMode.CLAMP);
     private final Shader nightGlass=new LinearGradient(0,0,40,48,
-            new int[]{0xff54588b,0xff273b60,0xff16243c},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
+            new int[]{ThemePalette.blend(darkColor(ThemePalette.ACCENT), darkColor(ThemePalette.SELECTED), .45f),
+                    darkColor(ThemePalette.BORDER), darkColor(ThemePalette.STAGE_TOP)},
+            new float[]{0,.35f,1},Shader.TileMode.CLAMP);
     private final Shader glassBorder=new LinearGradient(0,0,48,48,
             new int[]{0xbfffffff,0x26ffffff,0x71ffffff},new float[]{0,.55f,1},Shader.TileMode.CLAMP);
     private final Shader warmHalo=new RadialGradient(25,5,39,
             new int[]{0x9a52dad3,0x4652dad3,0x0052dad3},new float[]{0,.3f,1},Shader.TileMode.CLAMP);
     private final Shader coolHalo=new RadialGradient(9,40,38,
-            new int[]{0x9a7779ff,0x506a6fff,0x006a6fff},new float[]{0,.35f,1},Shader.TileMode.CLAMP);
+            new int[]{0x9a000000 | NIGHT_GLOW_RGB, 0x50000000 | NIGHT_GLOW_RGB, NIGHT_GLOW_RGB},
+            new float[]{0,.35f,1},Shader.TileMode.CLAMP);
     private final float[] sunX=new float[289],sunY=new float[289],moonX=new float[289],moonY=new float[289];
     private int sunCount,moonCount;
     private float shade,press,phase;
@@ -105,12 +112,12 @@ public final class ThemeToggleView extends View {
         paint.setStyle(Paint.Style.FILL);paint.setShader(shader);paint.setAlpha(Math.round(clamp(alpha)*255));
         c.drawRoundRect(rect,radius,radius,paint);paint.setShader(null);paint.setAlpha(255);
     }
-    private void edge(Canvas c,Path path,int color,float alpha){
+    private void edge(Canvas c,Path path,int color,int highlight,float alpha){
         if(alpha<=0)return;
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeCap(Paint.Cap.ROUND);paint.setShader(null);
         paint.setColor(color);paint.setAlpha(Math.round(alpha*70));paint.setStrokeWidth(5.2f);c.drawPath(path,paint);
         paint.setAlpha(Math.round(alpha*135));paint.setStrokeWidth(2.8f);c.drawPath(path,paint);
-        paint.setColor(0xffffffe9);paint.setAlpha(Math.round(alpha*245));paint.setStrokeWidth(.85f);c.drawPath(path,paint);
+        paint.setColor(highlight);paint.setAlpha(Math.round(alpha*245));paint.setStrokeWidth(.85f);c.drawPath(path,paint);
         paint.setStyle(Paint.Style.FILL);paint.setAlpha(255);
     }
 
@@ -120,7 +127,7 @@ public final class ThemeToggleView extends View {
         float scale=Math.min(getWidth()/ART_WIDTH,getHeight()/ART_HEIGHT);
         canvas.translate((getWidth()-ART_WIDTH*scale)/2,(getHeight()-ART_HEIGHT*scale)/2);canvas.scale(scale,scale);
         if(!isEnabled())canvas.saveLayerAlpha(0,0,ART_WIDTH,ART_HEIGHT,105);
-        shadow.setColor(ThemePalette.blend(0xffd0cec7,0xff0e1017,shade));canvas.drawRoundRect(track,22,22,shadow);
+        shadow.setColor(ThemePalette.blend(0xffd0cec7,darkColor(ThemePalette.BG),shade));canvas.drawRoundRect(track,22,22,shadow);
         fill(canvas,track,22,dayTrack,1-shade);fill(canvas,track,22,nightTrack,shade);
         paint.setStyle(Paint.Style.STROKE);paint.setColor(Color.argb(Math.round(52*(1-shade)+24*shade),255,255,255));
         paint.setStrokeWidth(.65f);canvas.drawRoundRect(trackInset,21,21,paint);paint.setStyle(Paint.Style.FILL);
@@ -133,15 +140,16 @@ public final class ThemeToggleView extends View {
         paint.setShader(warmHalo);paint.setAlpha(Math.round((1-shade)*(210+45*press)));canvas.drawCircle(25,5,39,paint);
         paint.setShader(coolHalo);paint.setAlpha(Math.round(shade*(220+35*press)));canvas.drawCircle(9,40,38,paint);
         paint.setShader(null);paint.setAlpha(255);
-        shadow.setColor(0xff33333b);canvas.drawRoundRect(thumb,14,14,shadow);
+        shadow.setColor(ThemePalette.blend(0xff33333b,darkColor(ThemePalette.DRAWER),shade));canvas.drawRoundRect(thumb,14,14,shadow);
         fill(canvas,thumb,14,dayGlass,1-shade);fill(canvas,thumb,14,nightGlass,shade);
         paint.setStyle(Paint.Style.STROKE);paint.setShader(glassBorder);paint.setAlpha(255);paint.setStrokeWidth(.7f);
         canvas.drawRoundRect(thumbInset,13.5f,13.5f,paint);paint.setShader(null);paint.setStyle(Paint.Style.FILL);
-        edge(canvas,dayEdge,0xff53ddd4,1-shade);edge(canvas,nightEdge,0xffa09aff,shade);
+        edge(canvas,dayEdge,0xff53ddd4,0xffffffe9,1-shade);
+        edge(canvas,nightEdge,darkColor(ThemePalette.ACCENT),darkColor(ThemePalette.STAGE_INK),shade);
         // Absolute progress makes particles follow a slow drag without restarting a timed effect.
         float scatter=(animating||dragging)?(float)Math.sin(Math.PI*shade):0;
         drawPixels(canvas,sunX,sunY,sunCount,1-shade,scatter,0xff17455c,11);
-        drawPixels(canvas,moonX,moonY,moonCount,shade,scatter,0xffedf9ff,37);
+        drawPixels(canvas,moonX,moonY,moonCount,shade,scatter,darkColor(ThemePalette.STAGE_INK),37);
         canvas.restoreToCount(save);
     }
 

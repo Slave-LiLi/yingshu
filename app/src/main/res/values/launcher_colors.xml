@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="launcher_bed">#142039</color>
+    <color name="launcher_rim">#405A76</color>
+    <color name="launcher_orbit_back">#969BFFEC</color>
+    <color name="launcher_crystal_lit">#C0FBF6</color>
+    <color name="launcher_crystal_top">#CBC2FF</color>
+    <color name="launcher_crystal_light">#85DFF2</color>
+    <color name="launcher_crystal_mid">#9CA6FD</color>
+    <color name="launcher_crystal_shadow">#3A689A</color>
+    <color name="launcher_crystal_lower">#86A9FC</color>
+    <color name="launcher_ridge">#DCE5F6FF</color>
+    <color name="launcher_tip">#C89BFFEC</color>
+    <color name="launcher_orbit_front">#9BFFEC</color>
+</resources>

@@ -272,9 +272,12 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(flags);
     }
     private Context themedContext(){
+        return themedContext(darkTheme);
+    }
+    private Context themedContext(boolean dark){
         ContextThemeWrapper context=new ContextThemeWrapper(this,R.style.AppTheme);
         Configuration config=new Configuration();
-        config.uiMode=darkTheme?Configuration.UI_MODE_NIGHT_YES:Configuration.UI_MODE_NIGHT_NO;
+        config.uiMode=dark?Configuration.UI_MODE_NIGHT_YES:Configuration.UI_MODE_NIGHT_NO;
         context.applyOverrideConfiguration(config);return context;
     }
     @Override public void onConfigurationChanged(Configuration config){
@@ -335,7 +338,8 @@ public final class MainActivity extends Activity {
 
     private void makeDrawer() {
         drawerScrim = new View(this);
-        drawerScrim.setBackgroundColor(Color.argb(126, 4, 12, 24));
+        palette.bind(drawerScrim, (scrim, p) -> scrim.setBackgroundColor(
+                ThemePalette.blend(0x7e040c18, 0x7e0b070f, p.progress())));
         drawerScrim.setOnClickListener(v -> setDrawerOpen(false));
         drawerScrim.setFocusable(false);
         drawerScrim.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -776,7 +780,7 @@ public final class MainActivity extends Activity {
             Toast.makeText(this,"无法读取许可说明，请重新安装完整安装包",Toast.LENGTH_LONG).show();if(required)finishAndRemoveTask();return;
         }
         if(required){
-            FrameLayout welcome=new FrameLayout(this);welcome.setBackgroundColor(BG);
+            FrameLayout welcome=new FrameLayout(this);welcome.setBackground(roleShape(ThemePalette.BG,0));
             TextView heading=text("映枢 · AGPL 开源",20,FG,true);heading.setGravity(Gravity.CENTER);
             welcome.addView(heading,new FrameLayout.LayoutParams(-1,-1));setContentView(welcome);
         }
@@ -987,9 +991,7 @@ public final class MainActivity extends Activity {
             modifier.setText(titles[i]);
             modifier.setTextSize(15);
             themeText(modifier, FG);
-            modifier.setButtonTintList(new android.content.res.ColorStateList(
-                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{ACCENT, MUTED}));
+            modifier.setButtonTintList(choiceTint());
             modifier.setChecked((rule.modifiers & (1 << i)) != 0);
             modifiers[i] = modifier;
         }
@@ -1173,7 +1175,18 @@ public final class MainActivity extends Activity {
         ndiHost.setHint("自动发现失败时填写");
         ndiHost.setBackground(shape(CARD, 12, BORDER));
         ndiHost.setPadding(dp(12), dp(8), dp(12), dp(8));
-        palette.bind(ndiHost, (field, p) -> field.setHintTextColor(p.color(ThemePalette.MUTED)));
+        // This field survives a manual theme switch, unlike the short-lived dialog editors.
+        int lightHighlight = selectionHighlight(false);
+        int darkHighlight = selectionHighlight(true);
+        palette.bind(ndiHost, (field, p) -> {
+            field.setHintTextColor(p.color(ThemePalette.MUTED));
+            field.setHighlightColor(ThemePalette.blend(lightHighlight, darkHighlight, p.progress()));
+        });
+        if (Build.VERSION.SDK_INT >= 29 && ndiHost.getTextCursorDrawable() != null) {
+            android.graphics.drawable.Drawable cursor = ndiHost.getTextCursorDrawable().mutate();
+            ndiHost.setTextCursorDrawable(cursor);
+            palette.bind(cursor, (drawable, p) -> drawable.setTint(p.color(ThemePalette.ACCENT)));
+        }
         ndiHost.setText(getPreferences(MODE_PRIVATE).getString("ndiHost", ""));
         marginAdd(ndiOptions, ndiHost, 8, 0);
         TextView ndiLink = text("NDI®  ·  ndi.video ↗", 14, ACCENT, false);
@@ -1474,6 +1487,16 @@ public final class MainActivity extends Activity {
         themeText(view,FG);
         return view;
     }
+    private int selectionHighlight(boolean dark) {
+        android.content.res.TypedArray colors = themedContext(dark).obtainStyledAttributes(
+                new int[]{android.R.attr.textColorHighlight});
+        try { return colors.getColor(0, Color.TRANSPARENT); }
+        finally { colors.recycle(); }
+    }
+    private android.content.res.ColorStateList choiceTint() {
+        return new android.content.res.ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}}, new int[]{ACCENT, MUTED});
+    }
     private Spinner themedSpinner(){
         Spinner view=new Spinner(themedContext());view.setPopupBackgroundDrawable(roleShape(ThemePalette.BG,12));
         palette.bind(view,(s,p)->s.setBackgroundTintList(android.content.res.ColorStateList.valueOf(p.color(ThemePalette.MUTED))));return view;
@@ -1481,7 +1504,15 @@ public final class MainActivity extends Activity {
     private ArrayAdapter<String> themedAdapter(List<String> values){
         return new ArrayAdapter<String>(themedContext(),android.R.layout.simple_spinner_dropdown_item,values){
             private View colorRow(View view,boolean dropdown){
-                if(view instanceof TextView){TextView label=(TextView)view;themeText(label,FG);if(dropdown)label.setBackground(roleShape(ThemePalette.BG,0));}
+                if (view instanceof TextView) {
+                    TextView label = (TextView) view;
+                    themeText(label, FG);
+                    if (dropdown) {
+                        label.setBackground(roleShape(ThemePalette.BG, 0));
+                        if (label instanceof android.widget.CheckedTextView)
+                            ((android.widget.CheckedTextView) label).setCheckMarkTintList(choiceTint());
+                    }
+                }
                 return view;
             }
             @Override public View getView(int position,View convertView,ViewGroup parent){return colorRow(super.getView(position,convertView,parent),false);}

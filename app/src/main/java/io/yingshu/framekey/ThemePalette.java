@@ -20,31 +20,34 @@ final class ThemePalette {
             0xffffffff,0xff155074,0xff5c439a,0xff4d697d,0xff182947,0xff0b1a30,0xffe5f6ff,
             0xff9bffec,0xff63aefa,0xffbba2ff,0xff00676b};
     private static final int[] DARK={
-            0xff091221,0xff121f33,0xffedf6ff,0xffa4b6ca,0xff81ebdd,0xff34465e,0xffffae8c,0xff0e192b,0xff193844,
-            0xff050d19,0xff667c91,0xff1c2b40,0xff1c3148,0xff16273c,0x308be8de,0x320a2935,
-            0xff092b39,0xff80c3fc,0xffc6adff,0xff94b2c7,0xff142039,0xff071325,0xffe5f6ff,
-            0xff9bffec,0xff63aefa,0xffbba2ff,0xff80eadc};
+            0xff0d0a11,0xff19141f,0xfff5effa,0xffc0b2cc,0xffc8a0ff,0xff4b3b57,0xffffb49b,0xff141018,0xff352342,
+            0xff09070c,0xff8e799e,0xff2b2233,0xff2e2238,0xff221a29,0x30d4b2ff,0x32231531,
+            0xff241132,0xffb88bea,0xffe2b5ed,0xffdcc6ef,0xff281731,0xff100b17,0xfffcf2ff,
+            0xfff3cdff,0xffa477ed,0xffd9a6ff,0xffd4b2ff};
+
+    static int darkColor(int role) { return DARK[role]; }
 
     // Mid-drag surfaces share a luminance near .179 but keep their individual hues.
     // At this level both near-black and near-white ink have at least 4.5:1 contrast.
     private static int transitionColor(int role, boolean darkInk) {
         switch (role) {
-            case BG:              return 0xff657886;
-            case CARD:            return 0xff6c7590;
-            case DRAWER:          return 0xff6a7784;
-            case SELECTED:        return 0xff5b7a88;
-            case BUTTON_DISABLED: return 0xff677882;
-            case BUTTON_TOP:      return 0xff63788a;
-            case BUTTON_BOTTOM:   return 0xff627983;
-            case ACCENT:          return 0xff258092;
-            case ACCENT_END:      return 0xff4c79a5;
+            case BG:              return 0xff7d7185;
+            case CARD:            return 0xff7f6f8d;
+            case DRAWER:          return 0xff7b7381;
+            case SELECTED:        return 0xff876b9b;
+            case BUTTON_DISABLED: return 0xff7c7188;
+            case BUTTON_TOP:      return 0xff816f8c;
+            case BUTTON_BOTTOM:   return 0xff7e7188;
+            case ACCENT:          return 0xff975faf;
+            case ACCENT_END:      return 0xff8d66a3;
+            case SWITCH_OFF:     return darkInk ? 0xff100c13 : 0xfff7effa;
             case FG:              return darkInk ? 0xff010102 : 0xfffffeff;
             case MUTED:           return darkInk ? 0xff020203 : 0xfffefeff;
-            case ACCENT_TEXT:     return darkInk ? 0xff000302 : 0xfffdffff;
+            case ACCENT_TEXT:     return darkInk ? 0xff000100 : 0xfffdffff;
             case WARN:            return darkInk ? 0xff040100 : 0xfffffefd;
             case VIOLET:          return darkInk ? 0xff020004 : 0xfffffefe;
             case FOCUS:           return darkInk ? 0xff010204 : 0xfffaffff;
-            // The button fill travels from dark teal to light cyan, opposite to app surfaces.
+            // The button fill travels from dark teal to light violet, opposite to app surfaces.
             case ON_ACCENT:       return darkInk ? 0xffffffff : 0xff000000;
             default:              return 0;
         }
