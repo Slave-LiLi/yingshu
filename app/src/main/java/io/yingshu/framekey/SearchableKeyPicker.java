@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.TypedArray;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -60,17 +62,17 @@ public final class SearchableKeyPicker {
         search.setTextColor(fg);search.setHintTextColor(muted);search.setHint("搜索，如 F5、空格、Enter");
         search.setContentDescription("搜索按键");search.setPadding(dp(context,12),dp(context,6),dp(context,8),dp(context,6));
         search.setMinHeight(dp(context,48));
-        android.graphics.drawable.StateListDrawable field = new android.graphics.drawable.StateListDrawable();
-        field.addState(new int[]{android.R.attr.state_focused},surface(context,card,accent,12));
-        field.addState(new int[]{},surface(context,card,border,12));
-        search.setBackground(field);
+        int idleEdge = ThemePalette.blend(border, muted, .74f);
+        search.setBackgroundTintList(null);
+        search.setBackground(controlOutline(context, card, idleEdge, accent));
         search.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         search.setImeOptions(EditorInfo.IME_ACTION_SEARCH|EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         searchRow.addView(search,new LinearLayout.LayoutParams(0,-2,1));
         Button clear=new Button(context);clear.setText("清空");clear.setAllCaps(false);clear.setTextSize(13);
         clear.setTextColor(ColorStateList.valueOf(accent));clear.setContentDescription("清空按键搜索");
-        android.graphics.drawable.RippleDrawable clearSurface = new android.graphics.drawable.RippleDrawable(
-                ColorStateList.valueOf((accent & 0x00ffffff) | 0x33000000),surface(context,card,border,12),null);
+        RippleDrawable clearSurface = new RippleDrawable(ColorStateList.valueOf((accent & 0x00ffffff) | 0x33000000),
+                controlOutline(context, card, idleEdge, accent), null);
+        clear.setBackgroundTintList(null);
         clear.setBackground(clearSurface);clear.setMinWidth(0);clear.setMinimumWidth(0);clear.setMinHeight(dp(context,48));
         clear.setPadding(dp(context,12),dp(context,6),dp(context,12),dp(context,6));
         LinearLayout.LayoutParams clearParams=new LinearLayout.LayoutParams(-2,-2);clearParams.setMarginStart(dp(context,8));
@@ -82,6 +84,12 @@ public final class SearchableKeyPicker {
         FrameLayout results=new FrameLayout(context);
         body.addView(results,new LinearLayout.LayoutParams(-1,0,1));
         ListView list=new ListView(context);list.setChoiceMode(ListView.CHOICE_MODE_SINGLE);list.setDividerHeight(0);
+        StateListDrawable selection = new StateListDrawable();
+        int highlight = ThemePalette.blend(bg, accent, .12f);
+        selection.addState(new int[]{android.R.attr.state_pressed}, surface(context, highlight, idleEdge, 8, 1));
+        selection.addState(new int[]{android.R.attr.state_focused}, surface(context, highlight, accent, 8, 2));
+        selection.addState(new int[]{}, new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        list.setSelector(selection);
         list.setCacheColorHint(bg);list.setBackgroundColor(bg);
         results.addView(list,new FrameLayout.LayoutParams(-1,-1));
         TextView empty=new TextView(context);empty.setGravity(Gravity.CENTER);empty.setTextSize(14);empty.setTextColor(muted);
@@ -131,7 +139,7 @@ public final class SearchableKeyPicker {
             if(body.getViewTreeObserver().isAlive())body.getViewTreeObserver().removeOnGlobalLayoutListener(layout);
         });
         dialog.show();
-        dialog.getWindow().setBackgroundDrawable(surface(context,bg,border,18));
+        dialog.getWindow().setBackgroundDrawable(surface(context,bg,border,18,1));
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN|WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         layout.onGlobalLayout();MotionFeedback.attach(cancel);
         body.requestFocus();update.run();return dialog;
@@ -167,8 +175,18 @@ public final class SearchableKeyPicker {
         if(keyboard!=null)keyboard.hideSoftInputFromWindow(view.getWindowToken(),0);
     }
     private static int dp(Context context,float value){return Math.round(value*context.getResources().getDisplayMetrics().density);}
-    private static GradientDrawable surface(Context context,int color,int border,float radius){
-        GradientDrawable drawable=new GradientDrawable();drawable.setColor(color);drawable.setCornerRadius(dp(context,radius));drawable.setStroke(dp(context,1),border);return drawable;
+    private static StateListDrawable controlOutline(Context context, int fill, int edge, int accent) {
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_focused}, surface(context, fill, accent, 10, 2));
+        states.addState(new int[]{}, surface(context, fill, edge, 10, 1));
+        return states;
+    }
+    private static GradientDrawable surface(Context context, int color, int border, float radius, int width) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(context, radius));
+        drawable.setStroke(dp(context, width), border);
+        return drawable;
     }
     private SearchableKeyPicker(){}
 }

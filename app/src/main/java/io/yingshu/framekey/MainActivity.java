@@ -20,7 +20,10 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
@@ -311,8 +314,7 @@ public final class MainActivity extends Activity {
         brandMarkParams.setMarginEnd(dp(6));top.addView(mark,brandMarkParams);
         TextView brand=text("映枢",15,FG,true);top.addView(brand);
         appBody.addView(top,new LinearLayout.LayoutParams(-1,-2));
-        View seam=new View(this);seam.setBackground(roleShape(ThemePalette.BORDER,0));
-        appBody.addView(seam,new LinearLayout.LayoutParams(-1,dp(1)));
+        sectionDivider(appBody);
         pageHost=new FrameLayout(this);appBody.addView(pageHost,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout home=createPage(PAGE_HOME),keys=createPage(PAGE_KEYS),devices=createPage(PAGE_DEVICES),
                 sources=createPage(PAGE_SOURCES),settings=createPage(PAGE_SETTINGS);
@@ -346,7 +348,7 @@ public final class MainActivity extends Activity {
         appRoot.addView(drawerScrim, new FrameLayout.LayoutParams(-1, -1));
 
         drawerPanel = vertical();
-        drawerPanel.setBackground(shape(DRAWER, 22, BORDER));
+        drawerPanel.setBackground(panelFrame(PanelFrame.Kind.DRAWER));
         drawerPanel.setClipToOutline(true);
         drawerPanel.setElevation(dp(12));
         drawerPanel.setClickable(true);
@@ -379,9 +381,7 @@ public final class MainActivity extends Activity {
         drawerClose.setOnClickListener(v -> setDrawerOpen(false));
         header.addView(drawerClose, new LinearLayout.LayoutParams(dp(48), dp(48)));
         drawerPanel.addView(header);
-        View seam = new View(this);
-        seam.setBackground(roleShape(ThemePalette.BORDER, 0));
-        drawerPanel.addView(seam, new LinearLayout.LayoutParams(-1, dp(1)));
+        sectionDivider(drawerPanel);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -402,8 +402,8 @@ public final class MainActivity extends Activity {
         android.widget.Space remaining = new android.widget.Space(this);
         list.addView(remaining, new LinearLayout.LayoutParams(-1, 0, 1));
         View divider = new View(this);
-        divider.setBackground(roleShape(ThemePalette.BORDER, 0));
-        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(-1, dp(1));
+        divider.setBackground(dividerSurface());
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(-1, Math.max(1, dp(.75f)));
         dividerParams.setMargins(dp(8), dp(12), dp(8), dp(8));
         list.addView(divider, dividerParams);
         addNavigationItem(list, PAGE_SETTINGS);
@@ -516,7 +516,7 @@ public final class MainActivity extends Activity {
     }
 
     private void makeHomePage(LinearLayout content) {
-        LinearLayout monitor=card();
+        LinearLayout monitor=card(PanelFrame.Kind.MONITOR);
         LinearLayout heading=horizontal();
         TextView caption=text("当前识别",14,FG,true);
         heading.addView(caption,new LinearLayout.LayoutParams(0,-2,1));
@@ -527,8 +527,14 @@ public final class MainActivity extends Activity {
         sourceTag.setBackground(roleShape(ThemePalette.SELECTED,8));heading.addView(sourceTag);
         monitor.addView(heading);
         previewRecognition=text("",23,FG,true);marginAdd(monitor,previewRecognition,8,12);updatePreviewRecognition();
-        videoPreview=new VideoPreview(this,palette);videoPreview.setBackground(roleShape(ThemePalette.PREVIEW,14));
-        videoPreview.setClipToOutline(true);monitor.addView(videoPreview,new LinearLayout.LayoutParams(-1,-2));
+        FrameLayout bezel = new FrameLayout(this);
+        bezel.setBackground(shape(BORDER, 3, 0));
+        int inset = Math.max(1, dp(1));
+        bezel.setPadding(inset, inset, inset, inset);
+        videoPreview = new VideoPreview(this, palette);
+        videoPreview.setBackground(roleShape(ThemePalette.PREVIEW, 0));
+        bezel.addView(videoPreview, new FrameLayout.LayoutParams(-1, -2));
+        monitor.addView(bezel, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout transport=vertical();
         videoState=text("未启动",13,MUTED,false);marginAdd(transport,videoState,12,12);
         runVideoButton=button("选择视频源",true);
@@ -556,7 +562,7 @@ public final class MainActivity extends Activity {
     }
 
     private LinearLayout modulePanel(int icon, String name) {
-        LinearLayout panel = card();
+        LinearLayout panel = card(PanelFrame.Kind.SECTION);
         LinearLayout heading = horizontal();
         ImageView mark = new ImageView(this);
         mark.setImageDrawable(themedIcon(icon, ACCENT, 18));
@@ -607,8 +613,15 @@ public final class MainActivity extends Activity {
     private void sectionDivider(LinearLayout panel) {
         View line = new View(this);
         line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        line.setBackground(roleShape(ThemePalette.BORDER, 0));
-        panel.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+        line.setBackground(dividerSurface());
+        panel.addView(line, new LinearLayout.LayoutParams(-1, Math.max(1, dp(.75f))));
+    }
+
+    private GradientDrawable dividerSurface() {
+        GradientDrawable line = new LiveGradientDrawable();
+        palette.bind(line, (d, p) -> d.setColor(ThemePalette.blend(
+                p.color(ThemePalette.CARD), p.color(ThemePalette.BORDER), .55f)));
+        return line;
     }
 
     private void addSwitch(LinearLayout panel, ElasticSwitch control) {
@@ -841,7 +854,9 @@ public final class MainActivity extends Activity {
         EditText input=new EditText(context);input.setId(View.generateViewId());inputLabel.setLabelFor(input.getId());input.setGravity(Gravity.TOP);input.setTextSize(14);input.setTypeface(Typeface.MONOSPACE);input.setTextColor(FG);input.setHintTextColor(MUTED);
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setHint("粘贴 YINGSHU_KEYS_V1 配置文本");
-        input.setBackground(shape(CARD,12,BORDER));input.setPadding(dp(12),dp(10),dp(12),dp(10));
+        input.setBackgroundTintList(null);
+        input.setBackground(controlOutline(ThemePalette.BG, 10, true));
+        input.setPadding(dp(12),dp(10),dp(12),dp(10));
         input.setMinLines(3);input.setMaxLines(7);form.addView(input,new LinearLayout.LayoutParams(-1,-2));
         String initial=supplied;
         if(initial==null){try{
@@ -929,7 +944,7 @@ public final class MainActivity extends Activity {
         for (RuleBook.Rule rule : ruleBook.rules) {
             boolean unknown = RuleBook.UNKNOWN_GUN_ID.equals(rule.id);
             if (!rule.gun.equals(previous)) {
-                group = card();
+                group = card(PanelFrame.Kind.SECTION);
                 TextView heading = text(unknown ? "其他情况" : RuleBook.gunName(rule.gun), 19, FG, true);
                 if (Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
                 marginAdd(group, heading, 0, 8);
@@ -943,7 +958,7 @@ public final class MainActivity extends Activity {
             LinearLayout row = horizontal();
             row.setPaddingRelative(dp(4), dp(8), dp(4), dp(8));
             row.setMinimumHeight(dp(56));
-            row.setBackground(ripple(CARD, 8));
+            row.setBackground(themedRipple(controlOutline(ThemePalette.CARD, 8, false), 8, false));
             TextView optic = text(unknown ? "未识别到枪械" : RuleBook.opticName(rule.optic), 15, FG, false);
             row.addView(optic, new LinearLayout.LayoutParams(0, -2, 1));
             String binding = KeyCatalog.name(rule.usage, rule.modifiers);
@@ -1173,7 +1188,8 @@ public final class MainActivity extends Activity {
         ndiHost.setTextSize(15);
         themeText(ndiHost, FG);
         ndiHost.setHint("自动发现失败时填写");
-        ndiHost.setBackground(shape(CARD, 12, BORDER));
+        ndiHost.setBackgroundTintList(null);
+        ndiHost.setBackground(controlOutline(ThemePalette.BG, 10, true));
         ndiHost.setPadding(dp(12), dp(8), dp(12), dp(8));
         // This field survives a manual theme switch, unlike the short-lived dialog editors.
         int lightHighlight = selectionHighlight(false);
@@ -1193,7 +1209,7 @@ public final class MainActivity extends Activity {
         ndiLink.setGravity(Gravity.CENTER_VERTICAL);
         ndiLink.setMinimumHeight(dp(48));
         ndiLink.setFocusable(true);
-        ndiLink.setBackground(ripple(CARD, 8));
+        ndiLink.setBackground(themedRipple(controlOutline(ThemePalette.CARD, 8, false), 8, false));
         ndiLink.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://ndi.video/"))));
         ndiOptions.addView(ndiLink);
         ndiOptions.addView(text("NDI® is a registered trademark of Vizrt NDI AB.", 12, MUTED, false));
@@ -1350,7 +1366,7 @@ public final class MainActivity extends Activity {
         }
         for(Map.Entry<String,String[]> entry:discovered.entrySet()) {
             final String address=entry.getKey();String[] data=entry.getValue();
-            LinearLayout row=vertical();row.setPadding(dp(12),dp(10),dp(12),dp(10));row.setBackground(shape(BG,10,BORDER));
+            LinearLayout row=vertical();row.setPadding(dp(12),dp(10),dp(12),dp(10));row.setBackground(roleShape(ThemePalette.BG,10));
             row.addView(text(data[0]+"  ·  "+data[1]+" dBm",14,FG,true));
             marginAdd(row,text(address,11,MUTED,false),4,7);
             boolean busy="CONNECTING".equals(phase)||"DISCOVERING".equals(phase)||"SUBSCRIBING".equals(phase)||"HANDSHAKING".equals(phase)||"READY".equals(phase);
@@ -1364,7 +1380,7 @@ public final class MainActivity extends Activity {
     private void drawUsbDevices(List<UsbProbe.DeviceInfo> devices) {
         if(destroyed)return;usbDevices.removeAllViews();
         for(UsbProbe.DeviceInfo info:devices) {
-            LinearLayout row=vertical();row.setPadding(dp(12),dp(10),dp(12),dp(10));row.setBackground(shape(BG,10,BORDER));
+            LinearLayout row=vertical();row.setPadding(dp(12),dp(10),dp(12),dp(10));row.setBackground(roleShape(ThemePalette.BG,10));
             row.addView(text(info.name,14,FG,true));marginAdd(row,text(info.description.split("\n",2)[0]+(info.hasPermission?" · 已授权":" · 未授权"),11,MUTED,false),5,5);
             if(info.uvc) {
                 Button open=button("授权并检查连接",false);open.setOnClickListener(v -> {
@@ -1457,9 +1473,13 @@ public final class MainActivity extends Activity {
     }
     private GradientDrawable roleShape(int role,int radius){GradientDrawable d=new LiveGradientDrawable();d.setCornerRadius(dp(radius));palette.bind(d,(shape,p)->shape.setColor(p.color(role)));return d;}
     private GradientDrawable fixedShape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setCornerRadius(dp(radius));d.setColor(color);return d;}
-    private LinearLayout card() {
+    private PanelFrame panelFrame(PanelFrame.Kind kind) {
+        return new PanelFrame(kind, getResources().getDisplayMetrics().density, palette);
+    }
+
+    private LinearLayout card(PanelFrame.Kind kind) {
         LinearLayout panel=vertical();
-        panel.setBackground(shape(CARD,18,BORDER));
+        panel.setBackground(panelFrame(kind));
         panel.setPadding(dp(16),dp(16),dp(16),dp(16));
         return panel;
     }
@@ -1474,8 +1494,18 @@ public final class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=28)headingText.setAccessibilityHeading(true);
         heading.addView(headingText);parent.addView(heading);
     }
-    private android.graphics.drawable.RippleDrawable ripple(int fill,int radius) {
-        return themedRipple(shape(fill,radius,0),radius,false);
+    private StateListDrawable controlOutline(int fillRole, int radius, boolean showIdleEdge) {
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[]{-android.R.attr.state_enabled}, roleShape(ThemePalette.BUTTON_DISABLED, radius));
+        GradientDrawable focus = roleShape(fillRole, radius);
+        palette.bind(focus, (shape, p) -> shape.setStroke(dp(2), p.color(ThemePalette.ACCENT_TEXT)));
+        states.addState(new int[]{android.R.attr.state_focused}, focus);
+        GradientDrawable idle = roleShape(fillRole, radius);
+        if (showIdleEdge) {
+            palette.bind(idle, (shape, p) -> shape.setStroke(dp(1), p.color(ThemePalette.SWITCH_OFF)));
+        }
+        states.addState(new int[]{}, idle);
+        return states;
     }
     private android.graphics.drawable.RippleDrawable themedRipple(android.graphics.drawable.Drawable content,int radius,boolean primary){
         android.graphics.drawable.RippleDrawable d=new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x16000000),content,fixedShape(Color.WHITE,radius));
@@ -1529,14 +1559,9 @@ public final class MainActivity extends Activity {
         button.setContentDescription(description);
         button.setTooltipText(description);
         button.setFocusable(true);
-        int radius = menu ? 14 : 24;
-        int fill = menu ? SELECTED : CARD;
-        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
-        GradientDrawable focused = roleShape(menu ? ThemePalette.SELECTED : ThemePalette.CARD, radius);
-        palette.bind(focused, (d, p) -> d.setStroke(dp(2), p.color(ThemePalette.FOCUS)));
-        states.addState(new int[]{android.R.attr.state_focused}, themedRipple(focused, radius, false));
-        states.addState(new int[]{}, themedRipple(shape(fill, radius, BORDER), radius, false));
-        button.setBackground(states);
+        int radius = menu ? 11 : 24;
+        button.setBackground(themedRipple(controlOutline(menu ? ThemePalette.SELECTED : ThemePalette.CARD,
+                radius, false), radius, false));
         MotionFeedback.attach(button);
         return button;
     }
@@ -1552,22 +1577,37 @@ public final class MainActivity extends Activity {
         b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
         final int[][] enabledStates={new int[]{-android.R.attr.state_enabled},new int[]{}};
         palette.bind(b,(button,p)->button.setTextColor(new android.content.res.ColorStateList(enabledStates,new int[]{p.color(ThemePalette.MUTED),p.color(primary?ThemePalette.ON_ACCENT:ThemePalette.FG)})));
-        android.graphics.drawable.StateListDrawable states=new android.graphics.drawable.StateListDrawable();
-        GradientDrawable disabled=roleShape(ThemePalette.BUTTON_DISABLED,14);int strokeWidth=dp(1);
-        palette.bind(disabled,(shape,p)->shape.setStroke(strokeWidth,p.color(ThemePalette.BORDER)));
-        states.addState(new int[]{-android.R.attr.state_enabled},disabled);
-        for(boolean focused:new boolean[]{true,false}){
-            GradientDrawable surface=new LiveGradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{ACCENT,CARD});
-            surface.setCornerRadius(dp(14));
-            palette.bind(surface,(shape,p)->{
-                int start=p.color(primary?ThemePalette.ACCENT:ThemePalette.BUTTON_TOP);
-                int end=p.color(primary?ThemePalette.ACCENT_END:ThemePalette.BUTTON_BOTTOM);
-                shape.setColors(new int[]{start,end});
-                shape.setStroke(focused?dp(2):strokeWidth,focused?p.color(ThemePalette.FOCUS):primary?end:p.color(ThemePalette.BORDER));
-            });
-            states.addState(focused?new int[]{android.R.attr.state_focused}:new int[]{},themedRipple(surface,14,primary));
-        }
-        b.setBackground(states);MotionFeedback.attach(b);
+        int radius = 11;
+        Drawable surface = primary ? primaryButtonFrame(radius) :
+                controlOutline(ThemePalette.BUTTON_BOTTOM, radius, true);
+        b.setBackground(themedRipple(surface, radius, primary));
+        MotionFeedback.attach(b);
+    }
+
+    private StateListDrawable primaryButtonFrame(int radius) {
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[]{-android.R.attr.state_enabled}, roleShape(ThemePalette.BUTTON_DISABLED, radius));
+        // The inner ring sits entirely on the gradient, so it can use the same high-contrast ink as the label.
+        GradientDrawable ring = new LiveGradientDrawable();
+        ring.setCornerRadius(dp(radius - 3));
+        ring.setColor(Color.TRANSPARENT);
+        palette.bind(ring, (shape, p) -> shape.setStroke(dp(2), p.color(ThemePalette.ON_ACCENT)));
+        GradientDrawable idle = primaryButtonFill(radius);
+        LayerDrawable focused = new LayerDrawable(new Drawable[]{primaryButtonFill(radius), ring});
+        int inset = dp(3);
+        focused.setLayerInset(1, inset, inset, inset, inset);
+        states.addState(new int[]{android.R.attr.state_focused}, focused);
+        states.addState(new int[]{}, idle);
+        return states;
+    }
+
+    private GradientDrawable primaryButtonFill(int radius) {
+        GradientDrawable surface = new LiveGradientDrawable();
+        surface.setOrientation(GradientDrawable.Orientation.LEFT_RIGHT);
+        surface.setCornerRadius(dp(radius));
+        palette.bind(surface, (shape,p) -> shape.setColors(new int[]{
+                p.color(ThemePalette.ACCENT), p.color(ThemePalette.ACCENT_END)}));
+        return surface;
     }
     private void presentDialog(AlertDialog dialog){
         dialog.show();

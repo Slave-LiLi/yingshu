@@ -8,6 +8,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
+import android.view.View;
 import android.view.animation.Interpolator;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -21,10 +22,10 @@ final class NavigationItem extends LinearLayout {
     private final TextView name, detail;
     private final ImageView mark;
     private final NavigationGlyph symbol;
-    private final GradientDrawable surface, plate;
+    private final GradientDrawable surface, plate, railFill;
+    private final View rail;
     private final RippleDrawable feedback;
-    private final int[] gradient = new int[2];
-    private final int fine, strong;
+    private final int focusWidth;
     private float progress;
     private ValueAnimator animator;
 
@@ -32,24 +33,33 @@ final class NavigationItem extends LinearLayout {
         super(context);
         this.palette = palette;
         this.title = title;
-        fine = dp(1);
-        strong = dp(2);
+        focusWidth = dp(2);
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
         setMinimumHeight(dp(58));
-        setPadding(dp(12), dp(9), dp(12), dp(9));
+        setPaddingRelative(dp(6), dp(9), dp(12), dp(9));
         setFocusable(true);
+        setDefaultFocusHighlightEnabled(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
         setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
 
-        surface = new LiveGradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, gradient);
-        surface.setCornerRadius(dp(16));
+        surface = new LiveGradientDrawable();
+        surface.setCornerRadius(dp(12));
         GradientDrawable mask = new GradientDrawable();
-        mask.setCornerRadius(dp(16));
+        mask.setCornerRadius(dp(12));
         mask.setColor(Color.WHITE);
         feedback = new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT), surface, mask);
         setBackground(feedback);
         MotionFeedback.attach(this);
+
+        rail = new View(context);
+        rail.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        railFill = new LiveGradientDrawable();
+        railFill.setCornerRadius(dp(2));
+        rail.setBackground(railFill);
+        LayoutParams railParams = new LayoutParams(dp(3), dp(24));
+        railParams.setMarginEnd(dp(3));
+        addView(rail, railParams);
 
         ImageView icon = new ImageView(context);
         icon.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -123,22 +133,19 @@ final class NavigationItem extends LinearLayout {
         name.setTextColor(palette.color(ThemePalette.FG));
         detail.setTextColor(palette.color(ThemePalette.MUTED));
         feedback.setColor(ColorStateList.valueOf(palette.color(ThemePalette.RIPPLE)));
+        railFill.setColor(palette.color(ThemePalette.ACCENT_TEXT));
         paintSelection();
     }
 
     private void paintSelection() {
         int drawer = palette.color(ThemePalette.DRAWER);
         int selected = palette.color(ThemePalette.SELECTED);
-        int border = palette.color(ThemePalette.BORDER);
-        int accent = palette.color(ThemePalette.ACCENT_TEXT);
-        gradient[0] = ThemePalette.blend(drawer, selected, progress);
-        gradient[1] = ThemePalette.blend(drawer, selected, progress * .62f);
-        surface.setColors(gradient);
-        int outline = ThemePalette.blend(drawer, ThemePalette.blend(border, accent, .42f), progress);
-        surface.setStroke(hasFocus() ? strong : fine, hasFocus() ? palette.color(ThemePalette.FOCUS) : outline);
-        plate.setColor(ThemePalette.blend(palette.color(ThemePalette.CARD), selected, progress * .55f));
-        plate.setStroke(fine, ThemePalette.blend(border, accent, progress * .65f));
+        surface.setColor(ThemePalette.blend(drawer, selected, progress));
+        surface.setStroke(focusWidth, hasFocus() ? palette.color(ThemePalette.FOCUS) : Color.TRANSPARENT);
+        plate.setColor(ThemePalette.blend(drawer, palette.color(ThemePalette.CARD), progress * .85f));
         symbol.setSelection(progress);
+        rail.setScaleY(.5f + .5f * progress);
+        rail.setAlpha(progress);
         mark.setAlpha(progress);
     }
 
